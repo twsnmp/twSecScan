@@ -148,6 +148,8 @@ func (a *App) StartScan(target string, scanType string, extra string) (*models.S
 		go a.runAPISecScan(scan, cfg, extra)
 	} else if scanType == "dns_whois" {
 		go a.runDNSWhoisScan(scan, cfg)
+	} else if scanType == "crypto_scanner" {
+		go a.runCryptoScan(scan, cfg)
 	} else {
 		go a.runPortScan(scan, cfg)
 	}
@@ -1038,5 +1040,93 @@ func (a *App) runTechDetectorScan(scan *models.Scan, cfg *models.Config) {
 
 	scan.Status = "completed"
 }
+
+func (a *App) runCryptoScan(scan *models.Scan, cfg *models.Config) {
+	defer func() {
+		scan.EndTime = time.Now()
+		if err := a.database.SaveScan(scan); err != nil {
+			log.Printf("Failed to save final scan status: %v", err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	host := scan.Target
+	if u, err := url.Parse(scan.Target); err == nil && u.Host != "" {
+		host = u.Hostname()
+	} else if h, _, err := net.SplitHostPort(scan.Target); err == nil {
+		host = h
+	}
+
+	scanner := osint.NewCryptoScanner(5 * time.Second)
+	results, err := scanner.Scan(ctx, host)
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("Failed to run crypto scanner: %v", err)
+		return
+	}
+
+	// Initialize AI Client if configured
+	var aiClient ai.LLMClient
+	if cfg.ActiveProvider == "ollama" || cfg.APIKeyOpenAI != "" || cfg.APIKeyAnthropic != "" {
+		aiClient, _ = ai.NewClient(cfg)
+	}
+
+	for _, res := range results {
+		findingID := fmt.Sprintf("find_crypto_%d_%d", res.Port, time.Now().UnixNano())
+		finding := &models.Finding{
+			ID:          findingID,
+			ScanID:      scan.ID,
+			Target:      scan.Target,
+			Module:      "crypto_scanner",
+			Title:       res.Title,
+			Description: res.Description,
+			Severity:    res.Severity,
+			Proof:       res.Proof,
+			Timestamp:   time.Now(),
+		}
+
+		if aiClient != nil {
+			advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+			if err == nil {
+				finding.AIAdvice = advice
+			} else {
+				finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+			}
+		} else {
+			finding.AIAdvice = "AI analysis not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+		}
+
+		if err := a.database.SaveFinding(finding); err != nil {
+			log.Printf("Failed to save finding: %v", err)
+		}
+		scan.FindingCount[res.Severity]++
+	}
+
+	if len(results) == 0 {
+		// Log informative finding that no obvious issues were detected
+		findingID := fmt.Sprintf("find_crypto_none_%d", time.Now().UnixNano())
+		finding := &models.Finding{
+			ID:          findingID,
+			ScanID:      scan.ID,
+			Target:      scan.Target,
+			Module:      "crypto_scanner",
+			Title:       "Crypto configuration checks passed",
+			Description: "Scanned HTTPS, SSH, and mail server ports for encryption settings. No deprecated protocols or invalid certificates were detected.",
+			Severity:    "info",
+			Proof:       "Scanned ports returned standard results.",
+			Timestamp:   time.Now(),
+			AIAdvice:    "Continue keeping your certificates renewed and outdated SSL/TLS versions disabled.",
+		}
+		if err := a.database.SaveFinding(finding); err != nil {
+			log.Printf("Failed to save finding: %v", err)
+		}
+		scan.FindingCount["info"]++
+	}
+
+	scan.Status = "completed"
+}
+
 
 

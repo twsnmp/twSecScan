@@ -91,6 +91,9 @@
       placeholderTargetDNSWhois: 'example.com or sub.example.com',
       typeDNSWhois: 'DNS & WHOIS (OSINT)',
       toastEnterUrl: 'Please enter a valid website URL (must start with http:// or https://).',
+      typeCryptoScanner: 'Crypto Scan (SSL/TLS/SSH)',
+      placeholderTargetCryptoScanner: 'example.com or 192.168.1.1',
+      scanFootnoteCryptoScanner: 'Checks HTTPS, SSH, SMTP, IMAP, and POP3 ports for weak/deprecated cryptographic settings, expired certificates, and plaintext protocol options.',
       testServerTitle: 'Local Test Server for Development',
       testServerDesc: 'Runs a mock local server simulating vulnerabilities (port 8081-8089) for safe testing.',
       testServerStatus: 'Test Server Status: ',
@@ -181,6 +184,9 @@
       scanFootnoteValidationTester: '巡回して取得したURLパラメータに対して、SQL InjectionやXSS of 脆弱性をテストします。',
       scanFootnoteTechDetector: 'HTTPヘッダ、HTMLソース、特定パスからCMS、Webサーバー、使用フレームワークを検出します。',
       toastEnterUrl: '有効なWebサイトのURLを入力してください（http:// または https:// で始まる必要があります）。',
+      typeCryptoScanner: '暗号設定検証 (Crypto Scan)',
+      placeholderTargetCryptoScanner: 'example.com または 192.168.1.1',
+      scanFootnoteCryptoScanner: 'HTTPS, SSH, SMTP, IMAP, POP3ポートに接続し、古いTLSバージョン、自己署名証明書、暗号化なしの通信方式、脆弱なSSHアルゴリズム設定などを検証します。',
       testServerTitle: '開発用ローカル・テストサーバー',
       testServerDesc: '構成ミスや入力バリデーションの動作をエミュレートするテストサーバー（ポート8081-8089）を起動・停止します。',
       testServerStatus: 'テストサーバーの状態: ',
@@ -463,6 +469,8 @@
         showToast(t('toastEnterAPITarget'));
       } else if (selectedScanType === 'dns_whois') {
         showToast(t('placeholderTargetDNSWhois'));
+      } else if (selectedScanType === 'crypto_scanner') {
+        showToast(t('placeholderTargetCryptoScanner'));
       } else {
         showToast(t('toastEnterTarget'));
       }
@@ -720,6 +728,13 @@
               >
                 {t('typeDNSWhois')}
               </button>
+              <button
+                disabled={scanning}
+                onclick={() => selectedScanType = 'crypto_scanner'}
+                class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all {selectedScanType === 'crypto_scanner' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
+              >
+                {t('typeCryptoScanner')}
+              </button>
             </div>
 
             <!-- Local Test Server Toggle -->
@@ -767,6 +782,8 @@
                     ? t('placeholderTargetAPISec')
                     : selectedScanType === 'dns_whois'
                     ? t('placeholderTargetDNSWhois')
+                    : selectedScanType === 'crypto_scanner'
+                    ? t('placeholderTargetCryptoScanner')
                     : t('placeholderTarget')
                 }
                 class="flex-1 px-4 py-3 rounded-xl glass-input text-base"
