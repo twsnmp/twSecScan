@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net"
 	"net/http"
@@ -1244,6 +1247,578 @@ func (a *App) runLocalAuditScan(scan *models.Scan, cfg *models.Config) {
 
 	scan.Status = "completed"
 }
+
+// ExportScanReport allows the user to export a report of a scan to a file (HTML, Markdown or JSON)
+func (a *App) ExportScanReport(scanID string) (string, error) {
+	if a.database == nil {
+		return "", fmt.Errorf("database not initialized")
+	}
+	if a.wailsCtx == nil {
+		return "", fmt.Errorf("Wails context not initialized")
+	}
+
+	scan, err := a.database.GetScan(scanID)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve scan: %v", err)
+	}
+	findings, err := a.database.ListFindingsByScan(scanID)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve findings: %v", err)
+	}
+
+	cfg, err := a.database.GetConfig()
+	lang := "en"
+	if err == nil {
+		lang = cfg.Language
+	}
+
+	// Default filename
+	defaultName := fmt.Sprintf("scan_report_%s.html", scan.ID)
+
+	filePath, err := wailsruntime.SaveFileDialog(a.wailsCtx, wailsruntime.SaveDialogOptions{
+		Title:           "Export Scan Report",
+		DefaultFilename: defaultName,
+		Filters: []wailsruntime.FileFilter{
+			{
+				DisplayName: "HTML Report (*.html)",
+				Pattern:     "*.html",
+			},
+			{
+				DisplayName: "Markdown Report (*.md)",
+				Pattern:     "*.md",
+			},
+			{
+				DisplayName: "JSON Report (*.json)",
+				Pattern:     "*.json",
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if filePath == "" {
+		return "", nil // cancelled
+	}
+
+	var content []byte
+	if strings.HasSuffix(strings.ToLower(filePath), ".html") {
+		content, err = a.generateHTMLReport(scan, findings, lang)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate HTML report: %v", err)
+		}
+	} else if strings.HasSuffix(strings.ToLower(filePath), ".md") {
+		content = a.generateMarkdownReport(scan, findings, lang)
+	} else {
+		// JSON
+		type ExportData struct {
+			Scan     *models.Scan      `json:"scan"`
+			Findings []*models.Finding `json:"findings"`
+		}
+		data := ExportData{
+			Scan:     scan,
+			Findings: findings,
+		}
+		content, err = json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal JSON: %v", err)
+		}
+	}
+
+	err = os.WriteFile(filePath, content, 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to write file: %v", err)
+	}
+
+	return filePath, nil
+}
+
+func (a *App) generateMarkdownReport(scan *models.Scan, findings []*models.Finding, lang string) []byte {
+	var sb strings.Builder
+
+	titleText := "Security Scan Report"
+	targetText := "Target"
+	statusText := "Status"
+	startTimeText := "Start Time"
+	endTimeText := "End Time"
+	durationText := "Duration"
+	summaryText := "Scan Summary"
+	findingsText := "Findings"
+	severityText := "Severity"
+	moduleText := "Module"
+	descText := "Description"
+	proofText := "Proof"
+	aiAdviceText := "AI Advice"
+	noFindingsText := "No findings detected."
+
+	if lang == "ja" {
+		titleText = "セキュリティスキャンレポート"
+		targetText = "対象"
+		statusText = "ステータス"
+		startTimeText = "開始日時"
+		endTimeText = "終了日時"
+		durationText = "所要時間"
+		summaryText = "スキャン概要"
+		findingsText = "検出結果"
+		severityText = "危険度"
+		moduleText = "モジュール"
+		descText = "詳細説明"
+		proofText = "証跡"
+		aiAdviceText = "AIアドバイス"
+		noFindingsText = "検出された問題はありません。"
+	}
+
+	sb.WriteString(fmt.Sprintf("# %s\n\n", titleText))
+	sb.WriteString(fmt.Sprintf("## %s\n\n", summaryText))
+	sb.WriteString(fmt.Sprintf("- **%s:** `%s`\n", targetText, scan.Target))
+	sb.WriteString(fmt.Sprintf("- **Scan ID:** `%s`\n", scan.ID))
+	sb.WriteString(fmt.Sprintf("- **%s:** `%s`\n", statusText, scan.Status))
+	sb.WriteString(fmt.Sprintf("- **%s:** %s\n", startTimeText, scan.StartTime.Format("2006-01-02 15:04:05")))
+	if !scan.EndTime.IsZero() {
+		sb.WriteString(fmt.Sprintf("- **%s:** %s\n", endTimeText, scan.EndTime.Format("2006-01-02 15:04:05")))
+		duration := scan.EndTime.Sub(scan.StartTime).Round(time.Second)
+		sb.WriteString(fmt.Sprintf("- **%s:** %s\n", durationText, duration.String()))
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("### Severity Counts\n\n")
+	sb.WriteString("| Critical | High | Medium | Low | Info |\n")
+	sb.WriteString("| :---: | :---: | :---: | :---: | :---: |\n")
+	sb.WriteString(fmt.Sprintf("| %d | %d | %d | %d | %d |\n\n",
+		scan.FindingCount["critical"],
+		scan.FindingCount["high"],
+		scan.FindingCount["medium"],
+		scan.FindingCount["low"],
+		scan.FindingCount["info"],
+	))
+
+	sb.WriteString(fmt.Sprintf("## %s\n\n", findingsText))
+	if len(findings) == 0 {
+		sb.WriteString(fmt.Sprintf("%s\n", noFindingsText))
+	} else {
+		for i, f := range findings {
+			sb.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, f.Title))
+			sb.WriteString(fmt.Sprintf("- **%s:** `%s`\n", severityText, strings.ToUpper(f.Severity)))
+			sb.WriteString(fmt.Sprintf("- **%s:** `%s`\n", moduleText, f.Module))
+			sb.WriteString(fmt.Sprintf("- **Timestamp:** %s\n\n", f.Timestamp.Format("2006-01-02 15:04:05")))
+			sb.WriteString(fmt.Sprintf("#### %s\n%s\n\n", descText, f.Description))
+			if f.Proof != "" {
+				sb.WriteString(fmt.Sprintf("#### %s\n```\n%s\n```\n\n", proofText, f.Proof))
+			}
+			if f.AIAdvice != "" {
+				sb.WriteString(fmt.Sprintf("#### %s\n%s\n\n", aiAdviceText, f.AIAdvice))
+			}
+			sb.WriteString("---\n\n")
+		}
+	}
+
+	return []byte(sb.String())
+}
+
+func (a *App) generateHTMLReport(scan *models.Scan, findings []*models.Finding, lang string) ([]byte, error) {
+	titleText := "Security Scan Report"
+	targetText := "Target"
+	statusText := "Status"
+	startTimeText := "Start Time"
+	endTimeText := "End Time"
+	durationText := "Duration"
+	summaryText := "Scan Summary"
+	findingsText := "Findings"
+	severityText := "Severity"
+	moduleText := "Module"
+	descText := "Description"
+	proofText := "Proof"
+	aiAdviceText := "AI Mitigation Advice"
+	noFindingsText := "No findings detected."
+
+	if lang == "ja" {
+		titleText = "セキュリティスキャンレポート"
+		targetText = "対象"
+		statusText = "ステータス"
+		startTimeText = "開始日時"
+		endTimeText = "終了日時"
+		durationText = "所要時間"
+		summaryText = "スキャン概要"
+		findingsText = "検出結果"
+		severityText = "危険度"
+		moduleText = "モジュール"
+		descText = "詳細説明"
+		proofText = "証跡"
+		aiAdviceText = "AIによる対策方法"
+		noFindingsText = "検出された問題はありません。"
+	}
+
+	durationStr := ""
+	if !scan.EndTime.IsZero() {
+		durationStr = scan.EndTime.Sub(scan.StartTime).Round(time.Second).String()
+	}
+
+	data := HTMLReportData{
+		Lang:           lang,
+		Title:          titleText,
+		Scan:           scan,
+		Findings:       findings,
+		StartTimeStr:   scan.StartTime.Format("2006-01-02 15:04:05"),
+		EndTimeStr:     scan.EndTime.Format("2006-01-02 15:04:05"),
+		DurationStr:    durationStr,
+		SummaryText:    summaryText,
+		TargetText:     targetText,
+		StatusText:     statusText,
+		StartTimeText:  startTimeText,
+		EndTimeText:    endTimeText,
+		DurationText:   durationText,
+		FindingsText:   findingsText,
+		SeverityText:   severityText,
+		ModuleText:     moduleText,
+		DescText:       descText,
+		ProofText:      proofText,
+		AiAdviceText:   aiAdviceText,
+		NoFindingsText: noFindingsText,
+	}
+
+	tmpl, err := template.New("report").Parse(htmlTemplate)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+type HTMLReportData struct {
+	Lang           string
+	Title          string
+	Scan           *models.Scan
+	Findings       []*models.Finding
+	StartTimeStr   string
+	EndTimeStr     string
+	DurationStr    string
+	SummaryText    string
+	TargetText     string
+	StatusText     string
+	StartTimeText  string
+	EndTimeText    string
+	DurationText   string
+	FindingsText   string
+	SeverityText   string
+	ModuleText     string
+	DescText       string
+	ProofText      string
+	AiAdviceText   string
+	NoFindingsText string
+}
+
+const htmlTemplate = `<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>{{.Title}}</title>
+	<style>
+		:root {
+			--bg-color: #0f172a;
+			--panel-bg: #1e293b;
+			--text-color: #f8fafc;
+			--text-muted: #94a3b8;
+			--border-color: #334155;
+			--primary: #6366f1;
+			--success: #10b981;
+			--danger: #ef4444;
+			--warning: #f59e0b;
+			--info: #3b82f6;
+		}
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+			background-color: var(--bg-color);
+			color: var(--text-color);
+			margin: 0;
+			padding: 2rem 1rem;
+			line-height: 1.5;
+		}
+		.container {
+			max-width: 1000px;
+			margin: 0 auto;
+		}
+		header {
+			border-bottom: 1px solid var(--border-color);
+			padding-bottom: 1.5rem;
+			margin-bottom: 2rem;
+		}
+		h1 {
+			font-size: 2.25rem;
+			font-weight: 800;
+			margin: 0 0 0.5rem 0;
+			background: linear-gradient(to right, #818cf8, #c084fc);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+		}
+		.subtitle {
+			color: var(--text-muted);
+			margin: 0;
+			font-size: 0.875rem;
+		}
+		.summary-card {
+			background-color: var(--panel-bg);
+			border: 1px solid var(--border-color);
+			border-radius: 1rem;
+			padding: 1.5rem;
+			margin-bottom: 2rem;
+			box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+		}
+		.summary-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 1.25rem;
+			margin-bottom: 1.5rem;
+		}
+		.summary-item {
+			display: flex;
+			flex-direction: column;
+		}
+		.summary-label {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			font-weight: 600;
+		}
+		.summary-value {
+			font-size: 1.125rem;
+			font-weight: 600;
+			margin-top: 0.25rem;
+			word-break: break-all;
+		}
+		.severity-counts {
+			display: flex;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+			margin-top: 1rem;
+			padding-top: 1rem;
+			border-top: 1px solid var(--border-color);
+		}
+		.badge {
+			font-size: 0.75rem;
+			font-weight: 700;
+			padding: 0.25rem 0.75rem;
+			border-radius: 9999px;
+			text-transform: uppercase;
+		}
+		.badge-critical { background-color: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+		.badge-high { background-color: rgba(249, 115, 22, 0.2); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.4); }
+		.badge-medium { background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+		.badge-low { background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
+		.badge-info { background-color: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.4); }
+		.badge-success { background-color: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+		
+		.finding-card {
+			background-color: var(--panel-bg);
+			border: 1px solid var(--border-color);
+			border-radius: 1rem;
+			padding: 1.5rem;
+			margin-bottom: 1.5rem;
+			box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+			border-left: 4px solid var(--border-color);
+		}
+		.finding-card.critical { border-left-color: var(--danger); }
+		.finding-card.high { border-left-color: var(--warning); }
+		.finding-card.medium { border-left-color: #f59e0b; }
+		.finding-card.low { border-left-color: var(--info); }
+		.finding-card.info { border-left-color: var(--text-muted); }
+
+		.finding-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+			gap: 1rem;
+			margin-bottom: 1rem;
+		}
+		.finding-title {
+			font-size: 1.25rem;
+			font-weight: 700;
+			margin: 0;
+		}
+		.finding-meta {
+			font-size: 0.875rem;
+			color: var(--text-muted);
+			margin-bottom: 1rem;
+		}
+		.finding-desc {
+			margin-bottom: 1rem;
+			white-space: pre-wrap;
+		}
+		.finding-proof {
+			background-color: #0f172a;
+			border: 1px solid var(--border-color);
+			border-radius: 0.5rem;
+			padding: 0.75rem 1rem;
+			font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+			font-size: 0.875rem;
+			color: #cbd5e1;
+			white-space: pre-wrap;
+			margin-bottom: 1rem;
+		}
+		.ai-advice {
+			background-color: rgba(99, 102, 241, 0.05);
+			border: 1px solid rgba(99, 102, 241, 0.2);
+			border-radius: 0.5rem;
+			padding: 1rem;
+			margin-top: 1rem;
+		}
+		.ai-advice-header {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			color: #818cf8;
+			font-weight: 600;
+			font-size: 0.875rem;
+			margin-bottom: 0.5rem;
+		}
+		.ai-advice-content {
+			font-size: 0.875rem;
+			color: #cbd5e1;
+		}
+		.ai-advice-content.fallback {
+			white-space: pre-wrap;
+		}
+		.ai-advice-content p {
+			margin-top: 0;
+			margin-bottom: 0.75rem;
+		}
+		.ai-advice-content ul, .ai-advice-content ol {
+			margin-top: 0;
+			margin-bottom: 0.75rem;
+			padding-left: 1.25rem;
+		}
+		.ai-advice-content li {
+			margin-bottom: 0.25rem;
+		}
+		.ai-advice-content code {
+			background-color: rgba(255, 255, 255, 0.1);
+			padding: 0.1rem 0.3rem;
+			border-radius: 0.25rem;
+			font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+			font-size: 0.85em;
+		}
+		.ai-advice-content pre {
+			background-color: #0f172a;
+			border: 1px solid var(--border-color);
+			border-radius: 0.5rem;
+			padding: 0.75rem 1rem;
+			overflow-x: auto;
+		}
+		.ai-advice-content pre code {
+			background-color: transparent;
+			padding: 0;
+			border-radius: 0;
+		}
+		.no-findings {
+			text-align: center;
+			padding: 3rem;
+			color: var(--text-muted);
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<header>
+			<h1>{{.Title}}</h1>
+			<p class="subtitle">twSecScan - generated on {{.StartTimeStr}}</p>
+		</header>
+
+		<div class="summary-card">
+			<div class="summary-grid">
+				<div class="summary-item">
+					<span class="summary-label">{{.TargetText}}</span>
+					<span class="summary-value">{{.Scan.Target}}</span>
+				</div>
+				<div class="summary-item">
+					<span class="summary-label">Scan ID</span>
+					<span class="summary-value">{{.Scan.ID}}</span>
+				</div>
+				<div class="summary-item">
+					<span class="summary-label">{{.StatusText}}</span>
+					<span class="summary-value">{{.Scan.Status}}</span>
+				</div>
+				<div class="summary-item">
+					<span class="summary-label">{{.StartTimeText}}</span>
+					<span class="summary-value">{{.StartTimeStr}}</span>
+				</div>
+				{{if .DurationStr}}
+				<div class="summary-item">
+					<span class="summary-label">{{.DurationText}}</span>
+					<span class="summary-value">{{.DurationStr}}</span>
+				</div>
+				{{end}}
+			</div>
+
+			<div class="severity-counts">
+				{{if .Findings}}
+					{{range $sev, $count := .Scan.FindingCount}}
+						{{if gt $count 0}}
+							<span class="badge badge-{{$sev}}">{{$sev}}: {{$count}}</span>
+						{{end}}
+					{{end}}
+				{{else}}
+					<span class="badge badge-success">Clean / Safe</span>
+				{{end}}
+			</div>
+		</div>
+
+		<h2>{{.FindingsText}} ({{len .Findings}})</h2>
+
+		<div class="findings-list">
+			{{if .Findings}}
+				{{range .Findings}}
+					<div class="finding-card {{.Severity}}">
+						<div class="finding-header">
+							<h3 class="finding-title">{{.Title}}</h3>
+							<span class="badge badge-{{.Severity}}">{{.Severity}}</span>
+						</div>
+						<div class="finding-meta">
+							Module: <strong>{{.Module}}</strong>
+						</div>
+						<div class="finding-desc">{{.Description}}</div>
+						
+						{{if .Proof}}
+							<div class="finding-proof"><strong>{{$.ProofText}}:</strong><br>{{.Proof}}</div>
+						{{end}}
+
+						{{if .AIAdvice}}
+							<div class="ai-advice">
+								<div class="ai-advice-header">
+									<svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+									{{$.AiAdviceText}}
+								</div>
+								<div class="ai-advice-content">{{.AIAdvice}}</div>
+							</div>
+						{{end}}
+					</div>
+				{{end}}
+			{{else}}
+				<div class="no-findings">
+					<p>{{.NoFindingsText}}</p>
+				</div>
+			{{end}}
+		</div>
+	</div>
+	<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+	<script>
+		document.addEventListener('DOMContentLoaded', () => {
+			document.querySelectorAll('.ai-advice-content').forEach(el => {
+				if (typeof marked !== 'undefined') {
+					el.innerHTML = marked.parse(el.textContent);
+				} else {
+					el.classList.add('fallback');
+				}
+			});
+		});
+	</script>
+</body>
+</html>`
 
 
 

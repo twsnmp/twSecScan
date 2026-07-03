@@ -101,7 +101,11 @@
       testServerTitle: 'Local Test Server for Development',
       testServerDesc: 'Runs a mock local server simulating vulnerabilities (port 8081-8089) for safe testing.',
       testServerStatus: 'Test Server Status: ',
-      testServerSetTarget: 'Set as Target'
+      testServerSetTarget: 'Set as Target',
+      exportReport: 'Export Report',
+      exportingReport: 'Exporting...',
+      toastExportSuccess: 'Report exported successfully: {path}',
+      toastExportFailed: 'Failed to export report: '
     },
     ja: {
       brandSub: 'AI搭載セキュリティスイート',
@@ -198,7 +202,11 @@
       testServerTitle: '開発用ローカル・テストサーバー',
       testServerDesc: '構成ミスや入力バリデーションの動作をエミュレートするテストサーバー（ポート8081-8089）を起動・停止します。',
       testServerStatus: 'テストサーバーの状態: ',
-      testServerSetTarget: 'ターゲットに設定'
+      testServerSetTarget: 'ターゲットに設定',
+      exportReport: 'レポートをエクスポート',
+      exportingReport: 'エクスポート中...',
+      toastExportSuccess: 'レポートをエクスポートしました: {path}',
+      toastExportFailed: 'レポートのエクスポートに失敗しました: '
     }
   };
 
@@ -208,6 +216,7 @@
   let apiBaseUrl = $state('');
   let selectedScanType = $state('osint'); // 'osint', 'webscanner'
   let scanning = $state(false);
+  let exporting = $state(false);
   let scanHistory = $state([]);
   let selectedScan = $state(null);
   let findings = $state([]);
@@ -402,6 +411,9 @@
     if (method === 'ToggleTestServer') {
       return args[0] ? 'http://localhost:8081' : '';
     }
+    if (method === 'ExportScanReport') {
+      return `/mock/path/scan_report_${args[0]}.html`;
+    }
     return null;
   }
 
@@ -582,6 +594,21 @@
     } finally {
       showDeleteConfirm = false;
       scanToDelete = null;
+    }
+  }
+
+  async function exportScanReport(scanID) {
+    if (exporting) return;
+    exporting = true;
+    try {
+      const filePath = await callBind('ExportScanReport', scanID);
+      if (filePath) {
+        showToast(t('toastExportSuccess', { path: filePath }));
+      }
+    } catch (e) {
+      showToast(t('toastExportFailed') + e.message);
+    } finally {
+      exporting = false;
     }
   }
 
@@ -1088,11 +1115,24 @@
                       {t('runId')}: {selectedScan.id} • {t('started')}: {new Date(selectedScan.start_time).toLocaleString()}
                     </p>
                   </div>
-                  {#if selectedScan.error_msg}
-                    <div class="text-xs text-red-400 bg-red-950/30 p-2 rounded-lg border border-red-500/20 max-w-xs">
-                      {t('error')}: {selectedScan.error_msg}
-                    </div>
-                  {/if}
+                  <div class="flex items-center gap-3">
+                    {#if selectedScan.status === 'completed'}
+                      <button
+                        onclick={() => exportScanReport(selectedScan.id)}
+                        disabled={exporting}
+                        class="px-3 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-600 disabled:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
+                        title={t('exportReport')}
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        {exporting ? t('exportingReport') : t('exportReport')}
+                      </button>
+                    {/if}
+                    {#if selectedScan.error_msg}
+                      <div class="text-xs text-red-400 bg-red-950/30 p-2 rounded-lg border border-red-500/20 max-w-xs">
+                        {t('error')}: {selectedScan.error_msg}
+                      </div>
+                    {/if}
+                  </div>
                 </div>
 
                 <div class="space-y-4">
