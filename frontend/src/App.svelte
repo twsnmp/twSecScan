@@ -69,10 +69,12 @@
       placeholderTargetWebScan: 'https://example.com',
       placeholderTargetAssetAuditor: 'https://example.com',
       placeholderTargetValidationTester: 'https://example.com',
+      placeholderTargetTechDetector: 'https://example.com',
       typePortScan: 'Port Scan (OSINT)',
       typeWebScan: 'Broken Link Checker (Web Scanner)',
       typeAssetAuditor: 'Asset Auditor (Directory Scanner)',
       typeValidationTester: 'Validation Tester (XSS/SQLi)',
+      typeTechDetector: 'Tech Stack Detector',
       typeAPISec: 'API Fuzzer (OpenAPI)',
       placeholderTargetAPISec: 'OpenAPI Spec URL or choose local file...',
       scanFootnoteAPISec: 'Parses OpenAPI (Swagger) spec and runs dynamic fuzzing tests on all endpoints.',
@@ -84,6 +86,7 @@
       scanFootnoteWebScanner: 'Recursively crawls internal pages to detect broken links and dead references.',
       scanFootnoteAssetAuditor: 'Scans for exposed config files, backups, repositories (.git), and administrative consoles.',
       scanFootnoteValidationTester: 'Crawls pages to find URL parameters and tests them for SQL Injection and XSS vulnerabilities.',
+      scanFootnoteTechDetector: 'Identifies web servers, frameworks, CMS, and libraries from headers, HTML contents, and probe paths.',
       scanFootnoteDNSWhois: 'Queries standard DNS records and fetches WHOIS registrar info with AI audit advice.',
       placeholderTargetDNSWhois: 'example.com or sub.example.com',
       typeDNSWhois: 'DNS & WHOIS (OSINT)',
@@ -159,10 +162,12 @@
       placeholderTargetWebScan: 'https://example.com',
       placeholderTargetAssetAuditor: 'https://example.com',
       placeholderTargetValidationTester: 'https://example.com',
+      placeholderTargetTechDetector: 'https://example.com',
       typePortScan: 'ポートスキャン (OSINT)',
       typeWebScan: 'リンク切れチェッカー (Web Scanner)',
       typeAssetAuditor: 'アセット監査 (Asset Auditor)',
       typeValidationTester: '入力値検証 (Validation Tester)',
+      typeTechDetector: '技術スタック検出',
       typeAPISec: 'APIセキュリティ (OpenAPI)',
       placeholderTargetAPISec: 'OpenAPI仕様書のURL、またはファイルを選択...',
       scanFootnoteAPISec: 'OpenAPI (Swagger) 仕様書をパースし、各エンドポイントに対して動的なセキュリティ・ファジングテストを実行します。',
@@ -173,7 +178,8 @@
       placeholderApiBaseUrl: '例: http://localhost:8080 (仕様書内のサーバー設定を上書きします)',
       scanFootnoteWebScanner: '同一ドメイン内の内部リンクを再帰的に巡回し、デッドリンクやリンク切れをチェックします。',
       scanFootnoteAssetAuditor: '公開されている環境変数ファイル（.env）、リポジトリ（.git）、バックアップ、管理画面などを検出します。',
-      scanFootnoteValidationTester: '巡回して取得したURLパラメータに対して、SQL InjectionやXSSの脆弱性をテストします。',
+      scanFootnoteValidationTester: '巡回して取得したURLパラメータに対して、SQL InjectionやXSS of 脆弱性をテストします。',
+      scanFootnoteTechDetector: 'HTTPヘッダ、HTMLソース、特定パスからCMS、Webサーバー、使用フレームワークを検出します。',
       toastEnterUrl: '有効なWebサイトのURLを入力してください（http:// または https:// で始まる必要があります）。',
       testServerTitle: '開発用ローカル・テストサーバー',
       testServerDesc: '構成ミスや入力バリデーションの動作をエミュレートするテストサーバー（ポート8081-8089）を起動・停止します。',
@@ -451,7 +457,7 @@
     lastScanTime = now;
 
     if (!target) {
-      if (selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor' || selectedScanType === 'validation_tester') {
+      if (selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor' || selectedScanType === 'validation_tester' || selectedScanType === 'tech_detector') {
         showToast(t('toastEnterUrl'));
       } else if (selectedScanType === 'apisec') {
         showToast(t('toastEnterAPITarget'));
@@ -463,7 +469,7 @@
       return;
     }
 
-    if ((selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor' || selectedScanType === 'validation_tester') && !target.startsWith('http://') && !target.startsWith('https://')) {
+    if ((selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor' || selectedScanType === 'validation_tester' || selectedScanType === 'tech_detector') && !target.startsWith('http://') && !target.startsWith('https://')) {
       showToast(t('toastEnterUrl'));
       return;
     }
@@ -695,6 +701,13 @@
               </button>
               <button
                 disabled={scanning}
+                onclick={() => selectedScanType = 'tech_detector'}
+                class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all {selectedScanType === 'tech_detector' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
+              >
+                {t('typeTechDetector')}
+              </button>
+              <button
+                disabled={scanning}
                 onclick={() => selectedScanType = 'apisec'}
                 class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all {selectedScanType === 'apisec' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
               >
@@ -748,6 +761,8 @@
                     ? t('placeholderTargetAssetAuditor')
                     : selectedScanType === 'validation_tester'
                     ? t('placeholderTargetValidationTester')
+                    : selectedScanType === 'tech_detector'
+                    ? t('placeholderTargetTechDetector')
                     : selectedScanType === 'apisec'
                     ? t('placeholderTargetAPISec')
                     : selectedScanType === 'dns_whois'
@@ -807,6 +822,8 @@
                 ? t('scanFootnoteAssetAuditor')
                 : selectedScanType === 'validation_tester'
                 ? t('scanFootnoteValidationTester')
+                : selectedScanType === 'tech_detector'
+                ? t('scanFootnoteTechDetector')
                 : selectedScanType === 'apisec'
                 ? t('scanFootnoteAPISec')
                 : selectedScanType === 'dns_whois'

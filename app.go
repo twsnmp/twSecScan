@@ -142,6 +142,8 @@ func (a *App) StartScan(target string, scanType string, extra string) (*models.S
 		go a.runAssetAuditScan(scan, cfg)
 	} else if scanType == "validation_tester" {
 		go a.runValidationTesterScan(scan, cfg)
+	} else if scanType == "tech_detector" {
+		go a.runTechDetectorScan(scan, cfg)
 	} else if scanType == "apisec" {
 		go a.runAPISecScan(scan, cfg, extra)
 	} else if scanType == "dns_whois" {
@@ -852,4 +854,104 @@ func (a *App) ToggleTestServer(enable bool) (string, error) {
 		return "", nil
 	}
 }
+
+func (a *App) runTechDetectorScan(scan *models.Scan, cfg *models.Config) {
+	defer func() {
+		scan.EndTime = time.Now()
+		if err := a.database.SaveScan(scan); err != nil {
+			log.Printf("Failed to save final scan status: %v", err)
+		}
+	}()
+
+	concurrency := cfg.ScanConcurrency
+	if concurrency <= 0 {
+		concurrency = 4
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	detector := webscanner.NewTechDetector()
+	resultsChan, err := detector.Start(ctx, scan.Target, webscanner.TechDetectorOptions{
+		Timeout:   5 * time.Second,
+		UserAgent: "twSecScan-TechDetector/1.0",
+	})
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("failed to start tech detector: %v", err)
+		return
+	}
+
+	// Initialize AI Client if configured
+	var aiClient ai.LLMClient
+	if cfg.ActiveProvider == "ollama" || cfg.APIKeyOpenAI != "" || cfg.APIKeyAnthropic != "" {
+		aiClient, _ = ai.NewClient(cfg)
+	}
+
+	var detectedList []string
+	var proofBuilder strings.Builder
+
+	for res := range resultsChan {
+		detectedList = append(detectedList, fmt.Sprintf("%s (%s)", res.Name, res.Category))
+		proofBuilder.WriteString(fmt.Sprintf("- %s: %s\n", res.Name, res.Description))
+	}
+
+	if len(detectedList) > 0 {
+		findingID := fmt.Sprintf("find_tech_%d", time.Now().UnixNano())
+		title := "Detected Technology Stack (Web Fingerprint)"
+		desc := fmt.Sprintf("The following technologies were detected on the target website:\n%s", strings.Join(detectedList, ", "))
+		proof := proofBuilder.String()
+
+		finding := &models.Finding{
+			ID:          findingID,
+			ScanID:      scan.ID,
+			Target:      scan.Target,
+			Module:      "tech_detector",
+			Title:       title,
+			Description: desc,
+			Severity:    "info",
+			Proof:       proof,
+			Timestamp:   time.Now(),
+		}
+
+		if aiClient != nil {
+			advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+			if err == nil {
+				finding.AIAdvice = advice
+			} else {
+				finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+			}
+		} else {
+			finding.AIAdvice = "AI analysis not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+		}
+
+		if err := a.database.SaveFinding(finding); err != nil {
+			log.Printf("Failed to save finding: %v", err)
+		}
+
+		scan.FindingCount["info"]++
+	} else {
+		findingID := fmt.Sprintf("find_tech_%d", time.Now().UnixNano())
+		finding := &models.Finding{
+			ID:          findingID,
+			ScanID:      scan.ID,
+			Target:      scan.Target,
+			Module:      "tech_detector",
+			Title:       "No Recognized Technologies Detected",
+			Description: "The technology detector scan completed, but no signatures matched the target website. This could mean the server headers are customized/hidden, or it uses less common technologies.",
+			Severity:    "info",
+			Proof:       "All signatures returned negative match.",
+			Timestamp:   time.Now(),
+			AIAdvice:    "No specific actions required. Obfuscating server headers is a good security practice to hinder automated reconnaissance.",
+		}
+
+		if err := a.database.SaveFinding(finding); err != nil {
+			log.Printf("Failed to save finding: %v", err)
+		}
+		scan.FindingCount["info"]++
+	}
+
+	scan.Status = "completed"
+}
+
 
