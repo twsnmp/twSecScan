@@ -62,6 +62,7 @@ func (ts *TestServer) Start() (string, error) {
 <body>
   <h1>Local Test Server</h1>
   <p>This server emulates various security misconfigurations for development and testing.</p>
+  <p>For support, please contact us at support@example.com or 03-1234-5678 (Zip: 100-0001).</p>
   <ul>
     <li><a href="/echo?content=InitialContent">Input Validation Tester (/echo)</a></li>
     <li><a href="/secret-backup.sql">Exposed SQL Backup File (/secret-backup.sql)</a></li>

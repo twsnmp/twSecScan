@@ -389,6 +389,51 @@ func (a *App) runWebScan(scan *models.Scan, cfg *models.Config) {
 
 			scan.FindingCount[hf.Severity]++
 		}
+
+		// Process PII (Personally Identifiable Information) findings
+		for _, pii := range res.PIIFindings {
+			severity := "low"
+			if pii.Type == "CreditCard" {
+				severity = "medium"
+			}
+
+			findingID := fmt.Sprintf("find_pii_%d", time.Now().UnixNano())
+			title := fmt.Sprintf("PII Exposure Detected (%s): %s", pii.Type, res.URL)
+			
+			desc := fmt.Sprintf("Personally Identifiable Information (PII) of type '%s' was exposed in the HTML body of %s.\nExposed Value: %s", 
+				pii.Type, res.URL, pii.Value)
+			proof := fmt.Sprintf("URL: %s\nPII Type: %s\nDetected Value: %s", res.URL, pii.Type, pii.Value)
+
+			finding := &models.Finding{
+				ID:          findingID,
+				ScanID:      scan.ID,
+				Target:      scan.Target,
+				Module:      "webscanner",
+				Title:       title,
+				Description: desc,
+				Severity:    severity,
+				Proof:       proof,
+				Timestamp:   time.Now(),
+			}
+
+			// Generate AI advice if client is configured
+			if aiClient != nil {
+				advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+				if err == nil {
+					finding.AIAdvice = advice
+				} else {
+					finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+				}
+			} else {
+				finding.AIAdvice = "AI analysis not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+			}
+
+			if err := a.database.SaveFinding(finding); err != nil {
+				log.Printf("Failed to save finding: %v", err)
+			}
+
+			scan.FindingCount[severity]++
+		}
 	}
 
 	scan.Status = "completed"

@@ -31,12 +31,16 @@ func TestCrawler_Start(t *testing.T) {
 			// 2. A broken internal link: /broken
 			// 3. An external link (will simulate external host manually in resolved URL if we could, or just point to a distinct path or simulated external URL)
 			// For testing external url resolved handling, we'll return a link to a different domain.
+			// 4. Various PII elements
 			fmt.Fprint(w, `
 				<html>
 				<body>
 					<a href="/about">About Us</a>
 					<a href="/broken">Broken Link</a>
 					<a href="https://example.com/external">External Link</a>
+					<p>Contact: test-user@example.com or 03-1234-5678.</p>
+					<p>Zip: 100-0001</p>
+					<p>CC: 4111-1111-1111-1111</p>
 				</body>
 				</html>
 			`)
@@ -103,6 +107,26 @@ func TestCrawler_Start(t *testing.T) {
 			}
 			if res.StatusCode != 200 {
 				t.Errorf("Base URL expected status 200, got %d", res.StatusCode)
+			}
+			
+			// Verify PII detection
+			expectedPII := map[string]string{
+				"Email":      "test-user@example.com",
+				"Phone":      "03-1234-5678",
+				"PostalCode": "100-0001",
+				"CreditCard": "4111-1111-1111-1111",
+			}
+			for piiType, expectedValue := range expectedPII {
+				found := false
+				for _, finding := range res.PIIFindings {
+					if finding.Type == piiType && finding.Value == expectedValue {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected PII type %s with value %s was not detected", piiType, expectedValue)
+				}
 			}
 		case ts.URL + "/about":
 			if res.Broken {
