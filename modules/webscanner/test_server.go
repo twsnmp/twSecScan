@@ -3,8 +3,10 @@ package webscanner
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -87,19 +89,120 @@ func (ts *TestServer) Start() (string, error) {
 		fmt.Fprint(w, "-- Dummy SQL Backup\nCREATE TABLE users (id INT, username VARCHAR(50));\n")
 	})
 
-	mux.HandleFunc("/.env", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprint(w, "APP_ENV=production\nDATABASE_URL=postgres://admin:super-secret-password@localhost:5432/db\nAPI_KEY=dummy_key_123456789\n")
+	// OpenAPI Specification Mock Endpoint
+	mux.HandleFunc("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Mock Vulnerable API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/users": {
+      "get": {
+        "summary": "Get users",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  }
+                },
+                "required": ["username"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    }
+  }
+}`)
 	})
 
-	mux.HandleFunc("/backup.zip", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/zip")
-		fmt.Fprint(w, "PK\x03\x04dummy-zip-content")
-	})
-
-	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, "<html><body><h1>Admin Console</h1><p>Restrict access to this console.</p></body></html>")
+	// API Endpoint GET /api/v1/users
+	mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			idStr := r.URL.Query().Get("id")
+			// Insecure reflection or SQL injection emulation
+			if strings.Contains(idStr, "'") || strings.Contains(idStr, "UNION") {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "Database error: syntax error near '"+idStr+"'")
+				return
+			}
+			if strings.Contains(idStr, "<script>") {
+				w.Header().Set("Content-Type", "text/html")
+				fmt.Fprint(w, "User ID: "+idStr)
+				return
+			}
+			// Boundary value test (non-integer check)
+			if idStr == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprint(w, "Bad Request: id is required")
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"id": %s, "name": "Test User"}`, idStr)
+		} else if r.Method == http.MethodPost {
+			// POST JSON Endpoint
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			bodyStr := string(body)
+			// Emulate SQLi or XSS in body parameters
+			if strings.Contains(bodyStr, "'") || strings.Contains(bodyStr, "UNION") {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "Database error: SQL syntax error in JSON input: "+bodyStr)
+				return
+			}
+			if strings.Contains(bodyStr, "<script>") {
+				w.Header().Set("Content-Type", "text/html")
+				fmt.Fprint(w, "Reflected payload: "+bodyStr)
+				return
+			}
+			// Length boundary check
+			if len(bodyStr) > 500 {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "Buffer overflow or unexpected error due to payload size")
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprint(w, `{"status": "created"}`)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
 	})
 
 	ts.server = &http.Server{

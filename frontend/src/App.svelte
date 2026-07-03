@@ -73,6 +73,14 @@
       typeWebScan: 'Broken Link Checker (Web Scanner)',
       typeAssetAuditor: 'Asset Auditor (Directory Scanner)',
       typeValidationTester: 'Validation Tester (XSS/SQLi)',
+      typeAPISec: 'API Fuzzer (OpenAPI)',
+      placeholderTargetAPISec: 'OpenAPI Spec URL or choose local file...',
+      scanFootnoteAPISec: 'Parses OpenAPI (Swagger) spec and runs dynamic fuzzing tests on all endpoints.',
+      selectFileBtn: 'Choose Spec File',
+      toastSelectFileFailed: 'Failed to choose file: ',
+      toastEnterAPITarget: 'Please enter a valid spec URL or select a local OpenAPI specification file.',
+      labelApiBaseUrl: 'API Base URL (Optional)',
+      placeholderApiBaseUrl: 'e.g. http://localhost:8080 (Overrides servers in spec)',
       scanFootnoteWebScanner: 'Recursively crawls internal pages to detect broken links and dead references.',
       scanFootnoteAssetAuditor: 'Scans for exposed config files, backups, repositories (.git), and administrative consoles.',
       scanFootnoteValidationTester: 'Crawls pages to find URL parameters and tests them for SQL Injection and XSS vulnerabilities.',
@@ -152,6 +160,14 @@
       typeWebScan: 'リンク切れチェッカー (Web Scanner)',
       typeAssetAuditor: 'アセット監査 (Asset Auditor)',
       typeValidationTester: '入力値検証 (Validation Tester)',
+      typeAPISec: 'APIセキュリティ (OpenAPI)',
+      placeholderTargetAPISec: 'OpenAPI仕様書のURL、またはファイルを選択...',
+      scanFootnoteAPISec: 'OpenAPI (Swagger) 仕様書をパースし、各エンドポイントに対して動的なセキュリティ・ファジングテストを実行します。',
+      selectFileBtn: '仕様書を選択',
+      toastSelectFileFailed: 'ファイル選択に失敗しました: ',
+      toastEnterAPITarget: '有効な仕様書URLを入力するか、ローカルのOpenAPI仕様書ファイルを選択してください。',
+      labelApiBaseUrl: 'API ベースURL (任意)',
+      placeholderApiBaseUrl: '例: http://localhost:8080 (仕様書内のサーバー設定を上書きします)',
       scanFootnoteWebScanner: '同一ドメイン内の内部リンクを再帰的に巡回し、デッドリンクやリンク切れをチェックします。',
       scanFootnoteAssetAuditor: '公開されている環境変数ファイル（.env）、リポジトリ（.git）、バックアップ、管理画面などを検出します。',
       scanFootnoteValidationTester: '巡回して取得したURLパラメータに対して、SQL InjectionやXSSの脆弱性をテストします。',
@@ -166,6 +182,7 @@
   // Svelte 5 Runes for state management
   let activeTab = $state('dashboard'); // 'dashboard', 'history', 'settings'
   let target = $state('');
+  let apiBaseUrl = $state('');
   let selectedScanType = $state('osint'); // 'osint', 'webscanner'
   let scanning = $state(false);
   let scanHistory = $state([]);
@@ -405,6 +422,8 @@
     if (!target) {
       if (selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor' || selectedScanType === 'validation_tester') {
         showToast(t('toastEnterUrl'));
+      } else if (selectedScanType === 'apisec') {
+        showToast(t('toastEnterAPITarget'));
       } else {
         showToast(t('toastEnterTarget'));
       }
@@ -419,7 +438,8 @@
     scanning = true;
     showToast(t('toastScanStarted', { target }));
     try {
-      const scan = await callBind('StartScan', target, selectedScanType);
+      const extra = selectedScanType === 'apisec' ? apiBaseUrl : '';
+      const scan = await callBind('StartScan', target, selectedScanType, extra);
       if (scan) {
         await loadHistory();
         // Periodically poll for updates until the active scan completes
@@ -428,6 +448,17 @@
     } catch (e) {
       scanning = false;
       showToast(t('toastScanFailed') + e.message);
+    }
+  }
+
+  async function selectAPISpecFile() {
+    try {
+      const filePath = await callBind('SelectOpenAPISpecFile');
+      if (filePath) {
+        target = filePath;
+      }
+    } catch (e) {
+      showToast(t('toastSelectFileFailed') + e.message);
     }
   }
 
@@ -508,8 +539,14 @@
 
   function setTestServerAsTarget() {
     if (testServerUrl) {
-      target = testServerUrl;
-      showToast(`Target set to ${testServerUrl}`);
+      if (selectedScanType === 'apisec') {
+        target = testServerUrl + '/openapi.json';
+        apiBaseUrl = testServerUrl;
+        showToast(`Target set to ${target}`);
+      } else {
+        target = testServerUrl;
+        showToast(`Target set to ${testServerUrl}`);
+      }
     }
   }
 
@@ -623,6 +660,13 @@
               >
                 {t('typeValidationTester')}
               </button>
+              <button
+                disabled={scanning}
+                onclick={() => selectedScanType = 'apisec'}
+                class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all {selectedScanType === 'apisec' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
+              >
+                {t('typeAPISec')}
+              </button>
             </div>
 
             <!-- Local Test Server Toggle -->
@@ -664,16 +708,28 @@
                     ? t('placeholderTargetAssetAuditor')
                     : selectedScanType === 'validation_tester'
                     ? t('placeholderTargetValidationTester')
+                    : selectedScanType === 'apisec'
+                    ? t('placeholderTargetAPISec')
                     : t('placeholderTarget')
                 }
                 class="flex-1 px-4 py-3 rounded-xl glass-input text-base"
                 onkeydown={(e) => e.key === 'Enter' && triggerScan()}
               />
+              {#if selectedScanType === 'apisec'}
+                <button
+                  type="button"
+                  disabled={scanning}
+                  onclick={selectAPISpecFile}
+                  class="px-4 py-3 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 transition-all font-semibold text-xs border border-slate-700/60 shrink-0"
+                >
+                  {t('selectFileBtn')}
+                </button>
+              {/if}
               <button
                 onclick={triggerScan}
                 onmousedown={triggerScan}
                 disabled={scanning}
-                class="px-8 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-medium shadow-md shadow-indigo-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-8 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-medium shadow-md shadow-indigo-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
               >
                 {#if scanning}
                   <svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
@@ -686,6 +742,20 @@
                 {/if}
               </button>
             </div>
+
+            {#if selectedScanType === 'apisec'}
+              <div class="flex flex-col gap-1.5 p-3.5 bg-slate-900/40 rounded-xl border border-slate-800/60">
+                <label for="api-base-url-input" class="text-xs font-semibold text-slate-300">{t('labelApiBaseUrl')}</label>
+                <input
+                  id="api-base-url-input"
+                  type="text"
+                  bind:value={apiBaseUrl}
+                  disabled={scanning}
+                  placeholder={t('placeholderApiBaseUrl')}
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs"
+                />
+              </div>
+            {/if}
             
             <div class="text-xs text-slate-500 flex items-center gap-2">
               <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -695,6 +765,8 @@
                 ? t('scanFootnoteAssetAuditor')
                 : selectedScanType === 'validation_tester'
                 ? t('scanFootnoteValidationTester')
+                : selectedScanType === 'apisec'
+                ? t('scanFootnoteAPISec')
                 : t('scanFootnote')}
             </div>
           </div>

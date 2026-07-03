@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,8 +15,11 @@ import (
 	"twSecScan/core/models"
 	"twSecScan/embed"
 	"twSecScan/modules/ai"
+	"twSecScan/modules/apisec"
 	"twSecScan/modules/osint"
 	"twSecScan/modules/webscanner"
+
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -103,7 +107,7 @@ func (a *App) DeleteScan(scanID string) error {
 }
 
 // StartScan triggers a vulnerability scan (port scan or web scan) asynchronously
-func (a *App) StartScan(target string, scanType string) (*models.Scan, error) {
+func (a *App) StartScan(target string, scanType string, extra string) (*models.Scan, error) {
 	if a.database == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -138,6 +142,8 @@ func (a *App) StartScan(target string, scanType string) (*models.Scan, error) {
 		go a.runAssetAuditScan(scan, cfg)
 	} else if scanType == "validation_tester" {
 		go a.runValidationTesterScan(scan, cfg)
+	} else if scanType == "apisec" {
+		go a.runAPISecScan(scan, cfg, extra)
 	} else {
 		go a.runPortScan(scan, cfg)
 	}
@@ -548,6 +554,139 @@ func (a *App) runValidationTesterScan(scan *models.Scan, cfg *models.Config) {
 	}
 
 	scan.Status = "completed"
+}
+
+// runAPISecScan implements parsing OpenAPI specifications and running API fuzzing
+func (a *App) runAPISecScan(scan *models.Scan, cfg *models.Config, customBaseURL string) {
+	defer func() {
+		scan.EndTime = time.Now()
+		if err := a.database.SaveScan(scan); err != nil {
+			log.Printf("Failed to save final scan status: %v", err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	// 1. Parse OpenAPI Spec
+	doc, err := apisec.LoadOpenAPISpec(ctx, scan.Target)
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("Failed to load OpenAPI Spec: %v", err)
+		return
+	}
+
+	endpoints := apisec.ExtractEndpoints(doc)
+	if len(endpoints) == 0 {
+		scan.Status = "failed"
+		scan.ErrorMsg = "No endpoints extracted from OpenAPI spec"
+		return
+	}
+
+	// 2. Determine base URL
+	baseURL := ""
+	if customBaseURL != "" {
+		baseURL = customBaseURL
+	} else {
+		if len(doc.Servers) > 0 && doc.Servers[0].URL != "" {
+			baseURL = doc.Servers[0].URL
+		}
+		
+		// If scan.Target is a URL, we can also extract its base URL
+		if strings.HasPrefix(scan.Target, "http://") || strings.HasPrefix(scan.Target, "https://") {
+			u, err := url.Parse(scan.Target)
+			if err == nil {
+				// e.g. http://localhost:8081/openapi.json -> http://localhost:8081
+				baseURL = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+			}
+		}
+
+		if baseURL == "" {
+			baseURL = "http://localhost:8080" // fallback
+		}
+	}
+
+	concurrency := cfg.ScanConcurrency
+	if concurrency <= 0 {
+		concurrency = 4
+	}
+
+	// 3. Start Fuzzer
+	fuzzer := apisec.NewAPIFuzzer()
+	resultsChan, err := fuzzer.Start(ctx, endpoints, apisec.APIFuzzOptions{
+		Concurrency: concurrency,
+		Timeout:     5 * time.Second,
+		BaseURL:     baseURL,
+		UserAgent:   "twSecScan-APISecurityScanner/1.0",
+	})
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("Failed to start API fuzzer: %v", err)
+		return
+	}
+
+	// Initialize AI Client if configured
+	var aiClient ai.LLMClient
+	if cfg.ActiveProvider == "ollama" || cfg.APIKeyOpenAI != "" || cfg.APIKeyAnthropic != "" {
+		aiClient, _ = ai.NewClient(cfg)
+	}
+
+	for res := range resultsChan {
+		if res.Vulnerable {
+			findingID := fmt.Sprintf("find_api_%d", time.Now().UnixNano())
+			title := fmt.Sprintf("API Vulnerability (%s): %s %s", res.VulnerabilityType, res.Method, res.Parameter)
+			desc := fmt.Sprintf("A potential %s vulnerability was detected on parameter '%s' of API path %s %s. Payload: '%s'",
+				res.VulnerabilityType, res.Parameter, res.Method, res.URL, res.Payload)
+
+			finding := &models.Finding{
+				ID:          findingID,
+				ScanID:      scan.ID,
+				Target:      scan.Target,
+				Module:      "apisec",
+				Title:       title,
+				Description: desc,
+				Severity:    res.Severity,
+				Proof:       res.Proof,
+				Timestamp:   time.Now(),
+			}
+
+			if aiClient != nil {
+				advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+				if err == nil {
+					finding.AIAdvice = advice
+				} else {
+					finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+				}
+			} else {
+				finding.AIAdvice = "AI analysis not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+			}
+
+			if err := a.database.SaveFinding(finding); err != nil {
+				log.Printf("Failed to save finding: %v", err)
+			}
+
+			scan.FindingCount[res.Severity]++
+		}
+	}
+
+	scan.Status = "completed"
+}
+
+// SelectOpenAPISpecFile shows a file selector dialog to choose an OpenAPI definition file (JSON or YAML)
+func (a *App) SelectOpenAPISpecFile() (string, error) {
+	if a.wailsCtx == nil {
+		return "", fmt.Errorf("Wails context not initialized")
+	}
+
+	return wailsruntime.OpenFileDialog(a.wailsCtx, wailsruntime.OpenDialogOptions{
+		Title: "Select OpenAPI Specification File",
+		Filters: []wailsruntime.FileFilter{
+			{
+				DisplayName: "OpenAPI Files (*.json, *.yaml, *.yml)",
+				Pattern:     "*.json;*.yaml;*.yml",
+			},
+		},
+	})
 }
 
 // ToggleTestServer handles starting and stopping the local mock vulnerability server.
