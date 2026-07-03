@@ -8,7 +8,7 @@
       dashboard: 'Dashboard',
       history: 'Scan History',
       settings: 'Settings',
-      version: 'v0.1.0 • Pure Go Engine',
+      version: 'v0.1.0',
       scanInProgress: 'Scan in progress...',
       dashboardTitle: 'Target Vulnerability Scanning',
       dashboardDesc: 'Perform security scans & use local/cloud AI analysis to formulate real-time, actionable security advice.',
@@ -102,7 +102,7 @@
       testServerDesc: 'Runs a mock local server simulating vulnerabilities (port 8081-8089) for safe testing.',
       testServerStatus: 'Test Server Status: ',
       testServerSetTarget: 'Set as Target',
-      exportReport: 'Export Report',
+      exportReport: 'Export',
       exportingReport: 'Exporting...',
       toastExportSuccess: 'Report exported successfully: {path}',
       toastExportFailed: 'Failed to export report: '
@@ -112,7 +112,7 @@
       dashboard: 'ダッシュボード',
       history: 'スキャン履歴',
       settings: '設定',
-      version: 'v0.1.0 • Pure Goエンジン',
+      version: 'v0.1.0',
       scanInProgress: 'スキャン実行中...',
       dashboardTitle: '対象の脆弱性スキャン',
       dashboardDesc: 'セキュリティスキャンを実行し、ローカルまたはクラウドのAI分析を使用して、リアルタイムで実用的なアドバイスを提供します。',
@@ -203,7 +203,7 @@
       testServerDesc: '構成ミスや入力バリデーションの動作をエミュレートするテストサーバー（ポート8081-8089）を起動・停止します。',
       testServerStatus: 'テストサーバーの状態: ',
       testServerSetTarget: 'ターゲットに設定',
-      exportReport: 'レポートをエクスポート',
+      exportReport: 'エクスポート',
       exportingReport: 'エクスポート中...',
       toastExportSuccess: 'レポートをエクスポートしました: {path}',
       toastExportFailed: 'レポートのエクスポートに失敗しました: '
@@ -699,8 +699,8 @@
   <!-- Main Content Area -->
   <main class="flex-1 flex flex-col overflow-hidden">
     <!-- Header -->
-    <header class="h-16 border-b border-slate-700/50 flex items-center justify-between px-8 bg-slate-900/30 backdrop-blur">
-      <h2 class="text-lg font-semibold text-slate-200 capitalize">{t(activeTab)}</h2>
+    <header class="h-14 border-b border-slate-700/50 flex items-center justify-between px-8 bg-slate-900/30 backdrop-blur">
+      <h3 class="text-md font-semibold text-slate-200 capitalize">{t(activeTab)}</h3>
       <div class="flex items-center gap-3">
         {#if scanning}
           <div class="flex items-center gap-2 text-indigo-400 text-sm">
@@ -712,13 +712,13 @@
     </header>
 
     <!-- Views -->
-    <div class="flex-1 overflow-y-auto p-8">
+    <div class="flex-1 overflow-y-auto p-4">
       {#if activeTab === 'dashboard'}
         <!-- Dashboard / Single Click Scan Entry -->
-        <div class="max-w-3xl mx-auto space-y-8 mt-4">
+        <div class="max-w-3xl mx-auto space-y-4 mt-2">
           <div class="text-center space-y-3">
-            <h3 class="text-3xl font-extrabold tracking-tight text-white">{t('dashboardTitle')}</h3>
-            <p class="text-slate-400 text-sm max-w-md mx-auto">
+            <h4 class="text-xl font-extrabold tracking-tight text-white">{t('dashboardTitle')}</h4>
+            <p class="text-slate-400 text-xs max-w-md mx-auto">
               {t('dashboardDesc')}
             </p>
           </div>
@@ -1011,15 +1011,15 @@
 
           <!-- Quick Stats / Recent Activity Summary -->
           <div class="grid grid-cols-3 gap-6">
-            <div class="glass-card p-6 rounded-2xl flex flex-col justify-between">
+            <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
               <span class="text-xs text-slate-400 uppercase font-medium tracking-wider">{t('statTotalScans')}</span>
               <span class="text-3xl font-bold mt-2 text-white">{scanHistory.length}</span>
             </div>
-            <div class="glass-card p-6 rounded-2xl flex flex-col justify-between">
+            <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
               <span class="text-xs text-slate-400 uppercase font-medium tracking-wider">{t('statActiveProvider')}</span>
               <span class="text-2xl font-bold mt-2 text-indigo-400 capitalize">{settings.active_provider}</span>
             </div>
-            <div class="glass-card p-6 rounded-2xl flex flex-col justify-between">
+            <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
               <span class="text-xs text-slate-400 uppercase font-medium tracking-wider">{t('statMaxConcurrency')}</span>
               <span class="text-3xl font-bold mt-2 text-purple-400">{settings.scan_concurrency}</span>
             </div>
