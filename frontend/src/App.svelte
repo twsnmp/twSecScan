@@ -11,11 +11,11 @@
       version: 'v0.1.0 • Pure Go Engine',
       scanInProgress: 'Scan in progress...',
       dashboardTitle: 'Target Vulnerability Scanning',
-      dashboardDesc: 'Scan target ports & use local/cloud AI analysis to formulate real-time, actionable security advice.',
+      dashboardDesc: 'Perform security scans & use local/cloud AI analysis to formulate real-time, actionable security advice.',
       placeholderTarget: 'example.com or 192.168.1.1',
       startScan: 'Start Scan',
       scanning: 'Scanning...',
-      scanFootnote: 'Scans standard TCP ports (SSH, HTTP, Database etc.) and executes AI recommendation queries.',
+      scanFootnote: 'Scans standard TCP ports (SSH, HTTP, Database etc.), performs DNS and WHOIS lookups, and runs AI recommendation queries.',
       statTotalScans: 'Total Scans Run',
       statActiveProvider: 'Active Provider',
       statMaxConcurrency: 'Max Concurrency',
@@ -71,7 +71,7 @@
       placeholderTargetValidationTester: 'https://example.com',
       placeholderTargetTechDetector: 'https://example.com',
       placeholderTargetLocalAudit: 'Select local folder to audit...',
-      typePortScan: 'Port Scan (OSINT)',
+      typePortScan: 'OSINT Scan (Ports, DNS & WHOIS)',
       typeWebScan: 'Web Scanner (Links & Headers)',
       typeAssetAuditor: 'Asset Auditor (Directory Scanner)',
       typeValidationTester: 'Validation Tester (XSS/SQLi)',
@@ -111,11 +111,11 @@
       version: 'v0.1.0 • Pure Goエンジン',
       scanInProgress: 'スキャン実行中...',
       dashboardTitle: '対象の脆弱性スキャン',
-      dashboardDesc: '対象のポートをスキャンし、ローカルまたはクラウドのAI分析を使用して、リアルタイムで実用的なセキュリティアドバイスを作成します。',
+      dashboardDesc: 'セキュリティスキャンを実行し、ローカルまたはクラウドのAI分析を使用して、リアルタイムで実用的なアドバイスを提供します。',
       placeholderTarget: 'example.com または 192.168.1.1',
       startScan: 'スキャン開始',
       scanning: 'スキャン中...',
-      scanFootnote: '標準的なTCPポート（SSH、HTTP、データベースなど）をスキャンし、AIによる推奨事項のクエリを実行します。',
+      scanFootnote: '標準的なTCPポート（SSH、HTTP、データベースなど）のスキャン、DNSおよびWHOIS情報の取得を行い、AIによる分析と推奨事項の提案を実行します。',
       statTotalScans: '総スキャン実行数',
       statActiveProvider: '有効なAIプロバイダー',
       statMaxConcurrency: '最大同時実行数',
@@ -171,7 +171,7 @@
       placeholderTargetValidationTester: 'https://example.com',
       placeholderTargetTechDetector: 'https://example.com',
       placeholderTargetLocalAudit: '監査するローカルフォルダを選択してください...',
-      typePortScan: 'ポートスキャン (OSINT)',
+      typePortScan: 'OSINTスキャン (ポート・DNS・WHOIS)',
       typeWebScan: 'Webスキャナー (リンク・ヘッダ検証)',
       typeAssetAuditor: 'アセット監査 (Asset Auditor)',
       typeValidationTester: '入力値検証 (Validation Tester)',
@@ -715,7 +715,7 @@
                 </div>
                 <div>
                   <h4 class="text-xs font-bold text-slate-100 leading-tight">{t('typePortScan')}</h4>
-                  <p class="text-[9px] text-slate-400 mt-1 truncate">Port Scan</p>
+                  <p class="text-[9px] text-slate-400 mt-1 truncate">Ports, DNS & WHOIS</p>
                 </div>
               </button>
 
@@ -814,24 +814,6 @@
                 </div>
               </button>
 
-              <button
-                disabled={scanning}
-                onclick={() => selectedScanType = 'dns_whois'}
-                class="group text-left p-3 rounded-xl transition-all border flex flex-col justify-between h-[100px] {selectedScanType === 'dns_whois' ? 'bg-indigo-600/20 border-indigo-500 shadow-md shadow-indigo-500/10' : 'bg-slate-900/40 border-slate-800 hover:border-slate-700/80 hover:bg-slate-900/60'}"
-              >
-                <div class="flex items-center justify-between w-full">
-                  <span class="p-1 rounded-lg bg-indigo-500/10 text-indigo-400 group-hover:scale-105 transition-transform">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
-                  </span>
-                  {#if selectedScanType === 'dns_whois'}
-                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 shadow shadow-indigo-400"></span>
-                  {/if}
-                </div>
-                <div>
-                  <h4 class="text-xs font-bold text-slate-100 leading-tight">{t('typeDNSWhois')}</h4>
-                  <p class="text-[9px] text-slate-400 mt-1 truncate">DNS & WHOIS</p>
-                </div>
-              </button>
 
               <button
                 disabled={scanning}

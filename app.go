@@ -259,6 +259,9 @@ func (a *App) runPortScan(scan *models.Scan, cfg *models.Config) {
 		scan.FindingCount[severity]++
 	}
 
+	// Also perform DNS & WHOIS checks as part of the OSINT scan
+	a.executeDNSWhois(ctx, scan, cfg, host)
+
 	scan.Status = "completed"
 }
 
@@ -785,6 +788,11 @@ func (a *App) runDNSWhoisScan(scan *models.Scan, cfg *models.Config) {
 		host = h
 	}
 
+	a.executeDNSWhois(ctx, scan, cfg, host)
+	scan.Status = "completed"
+}
+
+func (a *App) executeDNSWhois(ctx context.Context, scan *models.Scan, cfg *models.Config, host string) {
 	// 1. DNS Lookup
 	dnsRecords, err := osint.LookupDNS(ctx, host)
 	if err == nil {
@@ -810,7 +818,7 @@ func (a *App) runDNSWhoisScan(scan *models.Scan, cfg *models.Config) {
 
 		findingID := fmt.Sprintf("find_dns_%d", time.Now().UnixNano())
 		title := fmt.Sprintf("DNS Records for %s", host)
-		desc := "DNS query completed successfully. Retreived DNS records configuration."
+		desc := "DNS query completed successfully. Retrieved DNS records configuration."
 		proof := strings.Join(detailLines, " | ")
 		if proof == "" {
 			proof = "No DNS records resolved."
@@ -901,8 +909,6 @@ func (a *App) runDNSWhoisScan(scan *models.Scan, cfg *models.Config) {
 	} else {
 		log.Printf("WHOIS Lookup failed: %v", err)
 	}
-
-	scan.Status = "completed"
 }
 
 // SelectOpenAPISpecFile shows a file selector dialog to choose an OpenAPI definition file (JSON or YAML)
