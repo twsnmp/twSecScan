@@ -10,14 +10,16 @@ import (
 )
 
 type OllamaClient struct {
-	url   string
-	model string
+	url      string
+	model    string
+	language string
 }
 
-func NewOllamaClient(url, model string) *OllamaClient {
+func NewOllamaClient(url, model, language string) *OllamaClient {
 	return &OllamaClient{
-		url:   url,
-		model: model,
+		url:      url,
+		model:    model,
+		language: language,
 	}
 }
 
@@ -35,8 +37,8 @@ type ollamaGenerateResponse struct {
 func (c *OllamaClient) AnalyzeFinding(ctx context.Context, target, title, description, proof string) (string, error) {
 	reqBody := ollamaGenerateRequest{
 		Model:  c.model,
-		Prompt: buildUserPrompt(target, title, description, proof),
-		System: buildSystemPrompt(),
+		Prompt: buildUserPrompt(target, title, description, proof, c.language),
+		System: buildSystemPrompt(c.language),
 		Stream: false,
 	}
 

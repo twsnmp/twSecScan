@@ -10,6 +10,7 @@ type Config struct {
 	OllamaModel      string `json:"ollama_model"`
 	ActiveProvider   string `json:"active_provider"` // "ollama", "openai", "anthropic"
 	ScanConcurrency  int    `json:"scan_concurrency"`
+	Language         string `json:"language"`
 }
 
 // Scan represents a single scanning task execution and its status.

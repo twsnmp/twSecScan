@@ -10,14 +10,16 @@ import (
 )
 
 type OpenAIClient struct {
-	apiKey  string
-	baseURL string
+	apiKey   string
+	baseURL  string
+	language string
 }
 
-func NewOpenAIClient(apiKey string) *OpenAIClient {
+func NewOpenAIClient(apiKey, language string) *OpenAIClient {
 	return &OpenAIClient{
-		apiKey:  apiKey,
-		baseURL: "https://api.openai.com/v1/chat/completions",
+		apiKey:   apiKey,
+		baseURL:  "https://api.openai.com/v1/chat/completions",
+		language: language,
 	}
 }
 
@@ -43,8 +45,8 @@ func (c *OpenAIClient) AnalyzeFinding(ctx context.Context, target, title, descri
 	reqBody := openaiChatRequest{
 		Model: "gpt-4o-mini",
 		Messages: []openaiMessage{
-			{Role: "system", Content: buildSystemPrompt()},
-			{Role: "user", Content: buildUserPrompt(target, title, description, proof)},
+			{Role: "system", Content: buildSystemPrompt(c.language)},
+			{Role: "user", Content: buildUserPrompt(target, title, description, proof, c.language)},
 		},
 	}
 

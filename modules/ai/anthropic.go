@@ -10,14 +10,16 @@ import (
 )
 
 type AnthropicClient struct {
-	apiKey  string
-	baseURL string
+	apiKey   string
+	baseURL  string
+	language string
 }
 
-func NewAnthropicClient(apiKey string) *AnthropicClient {
+func NewAnthropicClient(apiKey, language string) *AnthropicClient {
 	return &AnthropicClient{
-		apiKey:  apiKey,
-		baseURL: "https://api.anthropic.com/v1/messages",
+		apiKey:   apiKey,
+		baseURL:  "https://api.anthropic.com/v1/messages",
+		language: language,
 	}
 }
 
@@ -44,9 +46,9 @@ func (c *AnthropicClient) AnalyzeFinding(ctx context.Context, target, title, des
 	reqBody := anthropicRequest{
 		Model:     "claude-3-5-sonnet-20241022",
 		MaxTokens: 1024,
-		System:    buildSystemPrompt(),
+		System:    buildSystemPrompt(c.language),
 		Messages: []anthropicMessage{
-			{Role: "user", Content: buildUserPrompt(target, title, description, proof)},
+			{Role: "user", Content: buildUserPrompt(target, title, description, proof, c.language)},
 		},
 	}
 

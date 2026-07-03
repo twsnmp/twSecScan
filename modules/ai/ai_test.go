@@ -72,7 +72,7 @@ func TestOllamaClient_AnalyzeFinding(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient(server.URL, "llama3")
+	client := NewOllamaClient(server.URL, "llama3", "en")
 	advice, err := client.AnalyzeFinding(context.Background(), "test-target", "vulnerability", "desc", "proof")
 	if err != nil {
 		t.Fatalf("AnalyzeFinding failed: %v", err)
@@ -84,6 +84,9 @@ func TestOllamaClient_AnalyzeFinding(t *testing.T) {
 
 func TestOpenAIClient_AnalyzeFinding(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" { // Wails baseURL overrides it
+			// we can skip path check as baseURL is customized
+		}
 		if r.Header.Get("Authorization") != "Bearer test-key" {
 			t.Errorf("expected auth header Bearer test-key, got %s", r.Header.Get("Authorization"))
 		}
@@ -99,7 +102,7 @@ func TestOpenAIClient_AnalyzeFinding(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-key")
+	client := NewOpenAIClient("test-key", "en")
 	client.baseURL = server.URL // Override for test
 	advice, err := client.AnalyzeFinding(context.Background(), "test-target", "vulnerability", "desc", "proof")
 	if err != nil {
@@ -128,7 +131,7 @@ func TestAnthropicClient_AnalyzeFinding(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAnthropicClient("test-anthropic-key")
+	client := NewAnthropicClient("test-anthropic-key", "en")
 	client.baseURL = server.URL // Override for test
 	advice, err := client.AnalyzeFinding(context.Background(), "test-target", "vulnerability", "desc", "proof")
 	if err != nil {

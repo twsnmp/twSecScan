@@ -2,6 +2,133 @@
   import { onMount } from 'svelte';
   import { marked } from 'marked';
 
+  const translations = {
+    en: {
+      brandSub: 'AI-Powered Security Suite',
+      dashboard: 'Dashboard',
+      history: 'Scan History',
+      settings: 'Settings',
+      version: 'v0.1.0 • Pure Go Engine',
+      scanInProgress: 'Scan in progress...',
+      dashboardTitle: 'Target Vulnerability Scanning',
+      dashboardDesc: 'Scan target ports & use local/cloud AI analysis to formulate real-time, actionable security advice.',
+      placeholderTarget: 'example.com or 192.168.1.1',
+      startScan: 'Start Scan',
+      scanning: 'Scanning...',
+      scanFootnote: 'Scans standard TCP ports (SSH, HTTP, Database etc.) and executes AI recommendation queries.',
+      statTotalScans: 'Total Scans Run',
+      statActiveProvider: 'Active Provider',
+      statMaxConcurrency: 'Max Concurrency',
+      searchHistory: 'Search history...',
+      noScans: 'No scans recorded yet.',
+      clean: 'Clean',
+      deleteScan: 'Delete scan',
+      selectScanPrompt: 'Select a scan from history to view detailed findings and AI advice.',
+      runId: 'Run ID',
+      started: 'Started',
+      error: 'Error',
+      findingsTitle: 'Vulnerabilities / Findings',
+      noFindings: 'No security vulnerabilities identified.',
+      proof: 'Proof',
+      aiAdvice: 'AI Mitigation Strategy',
+      configTitle: 'Application Configuration',
+      configDesc: 'Setup scanning constraints and AI provider authentication keys.',
+      activeAiProvider: 'Active AI Provider',
+      scanConcurrency: 'Scan Concurrency',
+      ollamaUrl: 'Ollama Endpoint URL',
+      ollamaModel: 'Ollama Model',
+      openaiKey: 'OpenAI API Key',
+      anthropicKey: 'Anthropic API Key',
+      saveConfig: 'Save Configuration',
+      deleteConfirmTitle: 'Delete Scan History',
+      deleteConfirmMsg: 'Are you sure you want to delete this scan history? This action cannot be undone.',
+      cancel: 'Cancel',
+      delete: 'Delete',
+      toastSaveSuccess: 'Settings saved successfully!',
+      toastSaveFailed: 'Failed to save settings: ',
+      toastEnterTarget: 'Please enter a target IP or domain.',
+      toastScanStarted: 'Scan initiated for {target}...',
+      toastScanFailed: 'Scan failed: ',
+      toastScanFinished: 'Scan for {target} finished with status: {status}',
+      toastDeleteSuccess: 'Scan history deleted.',
+      toastDeleteFailed: 'Delete failed: ',
+      langAuto: 'Auto (OS Default)',
+      langEn: 'English',
+      langJa: '日本語',
+      language: 'Language',
+      statusCompleted: 'Completed',
+      statusFailed: 'Failed',
+      statusRunning: 'Running',
+      sevCritical: 'Critical',
+      sevHigh: 'High',
+      sevMedium: 'Medium',
+      sevLow: 'Low',
+      sevInfo: 'Info'
+    },
+    ja: {
+      brandSub: 'AI搭載セキュリティスイート',
+      dashboard: 'ダッシュボード',
+      history: 'スキャン履歴',
+      settings: '設定',
+      version: 'v0.1.0 • Pure Goエンジン',
+      scanInProgress: 'スキャン実行中...',
+      dashboardTitle: '対象の脆弱性スキャン',
+      dashboardDesc: '対象のポートをスキャンし、ローカルまたはクラウドのAI分析を使用して、リアルタイムで実用的なセキュリティアドバイスを作成します。',
+      placeholderTarget: 'example.com または 192.168.1.1',
+      startScan: 'スキャン開始',
+      scanning: 'スキャン中...',
+      scanFootnote: '標準的なTCPポート（SSH、HTTP、データベースなど）をスキャンし、AIによる推奨事項のクエリを実行します。',
+      statTotalScans: '総スキャン実行数',
+      statActiveProvider: '有効なAIプロバイダー',
+      statMaxConcurrency: '最大同時実行数',
+      searchHistory: '履歴を検索...',
+      noScans: 'スキャン履歴はまだありません。',
+      clean: 'クリーン',
+      deleteScan: 'スキャンを削除',
+      selectScanPrompt: '履歴からスキャンを選択すると、詳細な検出事項とAIアドバイスが表示されます。',
+      runId: '実行ID',
+      started: '開始日時',
+      error: 'エラー',
+      findingsTitle: '脆弱性 / 検出事項',
+      noFindings: 'セキュリティ上の脆弱性は検出されませんでした。',
+      proof: '証拠',
+      aiAdvice: 'AIによる対策方法',
+      configTitle: 'アプリケーション設定',
+      configDesc: 'スキャンの制約事項とAIプロバイダーの認証キーを設定します。',
+      activeAiProvider: '有効なAIプロバイダー',
+      scanConcurrency: 'スキャン同時実行数',
+      ollamaUrl: 'Ollama エンドポイント URL',
+      ollamaModel: 'Ollama モデル',
+      openaiKey: 'OpenAI APIキー',
+      anthropicKey: 'Anthropic APIキー',
+      saveConfig: '設定を保存',
+      deleteConfirmTitle: 'スキャン履歴の削除',
+      deleteConfirmMsg: 'このスキャン履歴を削除してもよろしいですか？この操作は取り消せません。',
+      cancel: 'キャンセル',
+      delete: '削除',
+      toastSaveSuccess: '設定を保存しました！',
+      toastSaveFailed: '設定の保存に失敗しました: ',
+      toastEnterTarget: '対象のIPまたはドメインを入力してください。',
+      toastScanStarted: '{target} のスキャンを開始しました...',
+      toastScanFailed: 'スキャンに失敗しました: ',
+      toastScanFinished: '{target} のスキャンがステータス {status} で終了しました。',
+      toastDeleteSuccess: 'スキャン履歴を削除しました。',
+      toastDeleteFailed: '削除に失敗しました: ',
+      langAuto: 'Auto (OSの言語設定)',
+      langEn: 'English',
+      langJa: '日本語',
+      language: '言語',
+      statusCompleted: '完了',
+      statusFailed: '失敗',
+      statusRunning: '実行中',
+      sevCritical: '緊急',
+      sevHigh: '高',
+      sevMedium: '中',
+      sevLow: '低',
+      sevInfo: '情報'
+    }
+  };
+
   // Svelte 5 Runes for state management
   let activeTab = $state('dashboard'); // 'dashboard', 'history', 'settings'
   let target = $state('');
@@ -15,12 +142,32 @@
     ollama_url: 'http://localhost:11434',
     ollama_model: 'llama3',
     active_provider: 'ollama',
-    scan_concurrency: 10
+    scan_concurrency: 10,
+    language: 'auto'
   });
   let toastMsg = $state('');
   let searchHistoryQuery = $state('');
   let showDeleteConfirm = $state(false);
   let scanToDelete = $state(null);
+
+  // Derived active language
+  let activeLang = $derived.by(() => {
+    if (settings.language === 'auto') {
+      const osLang = typeof navigator !== 'undefined' ? (navigator.language || (navigator.languages && navigator.languages[0]) || 'en') : 'en';
+      return osLang.startsWith('ja') ? 'ja' : 'en';
+    }
+    return settings.language || 'en';
+  });
+
+  // Translation helper
+  function t(key, replaces = {}) {
+    const lang = activeLang;
+    let text = translations[lang]?.[key] || translations['en']?.[key] || key;
+    for (const [k, v] of Object.entries(replaces)) {
+      text = text.replace(`{${k}}`, v);
+    }
+    return text;
+  }
 
   // Derived state
   let filteredHistory = $derived(
@@ -117,7 +264,8 @@
           ollama_url: cfg.ollama_url || 'http://localhost:11434',
           ollama_model: cfg.ollama_model || 'llama3',
           active_provider: cfg.active_provider || 'ollama',
-          scan_concurrency: cfg.scan_concurrency || 10
+          scan_concurrency: cfg.scan_concurrency || 10,
+          language: cfg.language || 'auto'
         };
       }
     } catch (e) {
@@ -138,11 +286,12 @@
         ollama_url: settings.ollama_url,
         ollama_model: settings.ollama_model,
         active_provider: settings.active_provider,
-        scan_concurrency: Number(settings.scan_concurrency)
+        scan_concurrency: Number(settings.scan_concurrency),
+        language: settings.language
       });
-      showToast('Settings saved successfully!');
+      showToast(t('toastSaveSuccess'));
     } catch (e) {
-      showToast('Failed to save settings: ' + e.message);
+      showToast(t('toastSaveFailed') + e.message);
     }
   }
 
@@ -164,11 +313,11 @@
     lastScanTime = now;
 
     if (!target) {
-      showToast('Please enter a target IP or domain.');
+      showToast(t('toastEnterTarget'));
       return;
     }
     scanning = true;
-    showToast(`Scan initiated for ${target}...`);
+    showToast(t('toastScanStarted', { target }));
     try {
       const scan = await callBind('StartScan', target);
       if (scan) {
@@ -178,7 +327,7 @@
       }
     } catch (e) {
       scanning = false;
-      showToast('Scan failed: ' + e.message);
+      showToast(t('toastScanFailed') + e.message);
     }
   }
 
@@ -192,7 +341,7 @@
           if (current && current.status !== 'running') {
             clearInterval(timer);
             scanning = false;
-            showToast(`Scan for ${current.target} finished with status: ${current.status}`);
+            showToast(t('toastScanFinished', { target: current.target, status: t('status' + current.status.charAt(0).toUpperCase() + current.status.slice(1)) }));
             viewDetails(current);
           }
         }
@@ -223,14 +372,14 @@
     if (!scanToDelete) return;
     try {
       await callBind('DeleteScan', scanToDelete);
-      showToast('Scan history deleted.');
+      showToast(t('toastDeleteSuccess'));
       if (selectedScan && selectedScan.id === scanToDelete) {
         selectedScan = null;
         findings = [];
       }
       await loadHistory();
     } catch (e) {
-      showToast('Delete failed: ' + e.message);
+      showToast(t('toastDeleteFailed') + e.message);
     } finally {
       showDeleteConfirm = false;
       scanToDelete = null;
@@ -252,7 +401,7 @@
         <h1 class="text-xl font-bold tracking-wider bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
           twSecScan
         </h1>
-        <p class="text-xs text-slate-400 mt-1">AI-Powered Security Suite</p>
+        <p class="text-xs text-slate-400 mt-1">{t('brandSub')}</p>
       </div>
 
       <!-- Navigation Menu -->
@@ -262,7 +411,7 @@
           class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-all {activeTab === 'dashboard' ? 'bg-indigo-600/80 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-          Dashboard
+          {t('dashboard')}
         </button>
 
         <button
@@ -270,7 +419,7 @@
           class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-all {activeTab === 'history' ? 'bg-indigo-600/80 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          Scan History
+          {t('history')}
         </button>
 
         <button
@@ -278,13 +427,13 @@
           class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-all {activeTab === 'settings' ? 'bg-indigo-600/80 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-          Settings
+          {t('settings')}
         </button>
       </nav>
     </div>
 
     <div class="p-4 border-t border-slate-700/50 text-xs text-slate-500 text-center">
-      v0.1.0 • Pure Go Engine
+      {t('version')}
     </div>
   </aside>
 
@@ -292,12 +441,12 @@
   <main class="flex-1 flex flex-col overflow-hidden">
     <!-- Header -->
     <header class="h-16 border-b border-slate-700/50 flex items-center justify-between px-8 bg-slate-900/30 backdrop-blur">
-      <h2 class="text-lg font-semibold text-slate-200 capitalize">{activeTab}</h2>
+      <h2 class="text-lg font-semibold text-slate-200 capitalize">{t(activeTab)}</h2>
       <div class="flex items-center gap-3">
         {#if scanning}
           <div class="flex items-center gap-2 text-indigo-400 text-sm">
             <span class="animate-pulse w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
-            Scan in progress...
+            {t('scanInProgress')}
           </div>
         {/if}
       </div>
@@ -309,9 +458,9 @@
         <!-- Dashboard / Single Click Scan Entry -->
         <div class="max-w-3xl mx-auto space-y-8 mt-4">
           <div class="text-center space-y-3">
-            <h3 class="text-3xl font-extrabold tracking-tight text-white">Target Vulnerability Scanning</h3>
+            <h3 class="text-3xl font-extrabold tracking-tight text-white">{t('dashboardTitle')}</h3>
             <p class="text-slate-400 text-sm max-w-md mx-auto">
-              Scan target ports & use local/cloud AI analysis to formulate real-time, actionable security advise.
+              {t('dashboardDesc')}
             </p>
           </div>
 
@@ -322,7 +471,7 @@
                 type="text"
                 bind:value={target}
                 disabled={scanning}
-                placeholder="example.com or 192.168.1.1"
+                placeholder={t('placeholderTarget')}
                 class="flex-1 px-4 py-3 rounded-xl glass-input text-base"
                 onkeydown={(e) => e.key === 'Enter' && triggerScan()}
               />
@@ -337,31 +486,31 @@
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                   </svg>
-                  Scanning...
+                  {t('scanning')}
                 {:else}
-                  Start Scan
+                  {t('startScan')}
                 {/if}
               </button>
             </div>
             
             <div class="text-xs text-slate-500 flex items-center gap-2">
               <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              Scans standard TCP ports (SSH, HTTP, Database etc.) and executes AI recommendation queries.
+              {t('scanFootnote')}
             </div>
           </div>
 
           <!-- Quick Stats / Recent Activity Summary -->
           <div class="grid grid-cols-3 gap-6">
             <div class="glass-card p-6 rounded-2xl flex flex-col justify-between">
-              <span class="text-xs text-slate-400 uppercase font-medium tracking-wider">Total Scans Run</span>
+              <span class="text-xs text-slate-400 uppercase font-medium tracking-wider">{t('statTotalScans')}</span>
               <span class="text-3xl font-bold mt-2 text-white">{scanHistory.length}</span>
             </div>
             <div class="glass-card p-6 rounded-2xl flex flex-col justify-between">
-              <span class="text-xs text-slate-400 uppercase font-medium tracking-wider">Active Provider</span>
+              <span class="text-xs text-slate-400 uppercase font-medium tracking-wider">{t('statActiveProvider')}</span>
               <span class="text-2xl font-bold mt-2 text-indigo-400 capitalize">{settings.active_provider}</span>
             </div>
             <div class="glass-card p-6 rounded-2xl flex flex-col justify-between">
-              <span class="text-xs text-slate-400 uppercase font-medium tracking-wider">Max Concurrency</span>
+              <span class="text-xs text-slate-400 uppercase font-medium tracking-wider">{t('statMaxConcurrency')}</span>
               <span class="text-3xl font-bold mt-2 text-purple-400">{settings.scan_concurrency}</span>
             </div>
           </div>
@@ -376,14 +525,14 @@
               <input
                 type="text"
                 bind:value={searchHistoryQuery}
-                placeholder="Search history..."
+                placeholder={t('searchHistory')}
                 class="w-full px-3 py-2 rounded-lg glass-input text-sm"
               />
             </div>
 
             <div class="space-y-3 overflow-y-auto max-h-[500px] pr-2">
               {#if filteredHistory.length === 0}
-                <div class="text-slate-500 text-sm text-center py-8">No scans recorded yet.</div>
+                <div class="text-slate-500 text-sm text-center py-8">{t('noScans')}</div>
               {/if}
               {#each filteredHistory as scan}
                 <div
@@ -409,12 +558,12 @@
                               {sev === 'low' ? 'bg-blue-950/50 text-blue-400 border border-blue-500/20' : ''}
                               {sev === 'info' ? 'bg-slate-800 text-slate-300' : ''}
                             ">
-                              {sev}: {count}
+                              {t('sev' + sev.charAt(0).toUpperCase() + sev.slice(1))}: {count}
                             </span>
                           {/if}
                         {/each}
                       {:else if scan.status === 'completed'}
-                        <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-950/50 text-emerald-400 border border-emerald-500/20">Clean</span>
+                        <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-950/50 text-emerald-400 border border-emerald-500/20">{t('clean')}</span>
                       {/if}
                     </div>
                   </div>
@@ -425,12 +574,12 @@
                       {scan.status === 'failed' ? 'bg-red-950 text-red-400 border border-red-500/20' : ''}
                       {scan.status === 'running' ? 'bg-indigo-950 text-indigo-400 border border-indigo-500/20 animate-pulse' : ''}
                     ">
-                      {scan.status}
+                      {t('status' + scan.status.charAt(0).toUpperCase() + scan.status.slice(1))}
                     </span>
                     <button
                       onclick={(e) => { e.stopPropagation(); confirmDeleteScan(scan.id); }}
                       class="text-slate-500 hover:text-red-400 p-1 transition-colors"
-                      title="Delete scan"
+                      title={t('deleteScan')}
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                     </button>
@@ -445,7 +594,7 @@
             {#if !selectedScan}
               <div class="glass-panel rounded-2xl p-8 text-center text-slate-500 h-full flex flex-col justify-center items-center">
                 <svg class="w-12 h-12 text-slate-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                Select a scan from history to view detailed findings and AI advice.
+                {t('selectScanPrompt')}
               </div>
             {:else}
               <div class="glass-panel rounded-2xl p-6 space-y-6 max-h-[600px] overflow-y-auto">
@@ -453,21 +602,21 @@
                   <div>
                     <h3 class="text-xl font-bold text-white truncate max-w-[400px]">{selectedScan.target}</h3>
                     <p class="text-xs text-slate-400 mt-1">
-                      Run ID: {selectedScan.id} • Started: {new Date(selectedScan.start_time).toLocaleString()}
+                      {t('runId')}: {selectedScan.id} • {t('started')}: {new Date(selectedScan.start_time).toLocaleString()}
                     </p>
                   </div>
                   {#if selectedScan.error_msg}
                     <div class="text-xs text-red-400 bg-red-950/30 p-2 rounded-lg border border-red-500/20 max-w-xs">
-                      Error: {selectedScan.error_msg}
+                      {t('error')}: {selectedScan.error_msg}
                     </div>
                   {/if}
                 </div>
 
                 <div class="space-y-4">
-                  <h4 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Vulnerabilities / Findings ({findings.length})</h4>
+                  <h4 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">{t('findingsTitle')} ({findings.length})</h4>
                   
                   {#if findings.length === 0}
-                    <div class="text-slate-500 text-sm py-4">No security vulnerabilities identified.</div>
+                    <div class="text-slate-500 text-sm py-4">{t('noFindings')}</div>
                   {/if}
 
                   {#each findings as finding}
@@ -487,7 +636,7 @@
                           {finding.severity === 'low' ? 'bg-blue-500/20 text-blue-300' : ''}
                           {finding.severity === 'info' ? 'bg-slate-500/20 text-slate-300' : ''}
                         ">
-                          {finding.severity}
+                          {t('sev' + finding.severity.charAt(0).toUpperCase() + finding.severity.slice(1))}
                         </span>
                       </div>
 
@@ -495,7 +644,7 @@
                       
                       {#if finding.proof}
                         <div class="mt-3 bg-slate-950/40 p-2.5 rounded text-xs font-mono text-slate-300 border border-slate-800/80">
-                          <strong>Proof:</strong> {finding.proof}
+                          <strong>{t('proof')}:</strong> {finding.proof}
                         </div>
                       {/if}
 
@@ -503,7 +652,7 @@
                         <div class="mt-3 bg-indigo-950/20 p-3 rounded-lg border border-indigo-500/10 text-xs space-y-1">
                           <div class="text-indigo-400 font-semibold flex items-center gap-1.5">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-                            AI Mitigation Strategy:
+                            {t('aiAdvice')}:
                           </div>
                           <div class="markdown-body text-slate-300 text-xs mt-1">
                             {@html marked.parse(finding.ai_advice)}
@@ -522,15 +671,15 @@
         <!-- Settings Form -->
         <div class="max-w-2xl mx-auto glass-panel p-8 rounded-2xl shadow-xl space-y-6">
           <div class="border-b border-slate-700/50 pb-4">
-            <h3 class="text-xl font-bold text-white">Application Configuration</h3>
-            <p class="text-xs text-slate-400 mt-1">Setup scanning constraints and AI provider authentication keys.</p>
+            <h3 class="text-xl font-bold text-white">{t('configTitle')}</h3>
+            <p class="text-xs text-slate-400 mt-1">{t('configDesc')}</p>
           </div>
 
           <div class="space-y-4">
             <div class="grid grid-cols-2 gap-4">
               <!-- Active LLM Provider -->
               <div class="flex flex-col gap-2">
-                <label for="provider" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active AI Provider</label>
+                <label for="provider" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('activeAiProvider')}</label>
                 <select
                   id="provider"
                   bind:value={settings.active_provider}
@@ -544,7 +693,7 @@
 
               <!-- Concurrency -->
               <div class="flex flex-col gap-2">
-                <label for="concurrency" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Scan Concurrency</label>
+                <label for="concurrency" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('scanConcurrency')}</label>
                 <input
                   id="concurrency"
                   type="number"
@@ -554,11 +703,27 @@
               </div>
             </div>
 
+            <div class="grid grid-cols-2 gap-4 border-t border-slate-800 pt-4">
+              <!-- Language Selector -->
+              <div class="flex flex-col gap-2">
+                <label for="language" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('language')}</label>
+                <select
+                  id="language"
+                  bind:value={settings.language}
+                  class="px-3 py-2 rounded-lg glass-input text-sm"
+                >
+                  <option value="auto">{t('langAuto')}</option>
+                  <option value="en">{t('langEn')}</option>
+                  <option value="ja">{t('langJa')}</option>
+                </select>
+              </div>
+            </div>
+
             {#if settings.active_provider === 'ollama'}
               <!-- Ollama Options -->
               <div class="grid grid-cols-2 gap-4 border-t border-slate-800 pt-4">
                 <div class="flex flex-col gap-2">
-                  <label for="ollamaUrl" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Ollama Endpoint URL</label>
+                  <label for="ollamaUrl" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('ollamaUrl')}</label>
                   <input
                     id="ollamaUrl"
                     type="text"
@@ -567,7 +732,7 @@
                   />
                 </div>
                 <div class="flex flex-col gap-2">
-                  <label for="ollamaModel" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Ollama Model</label>
+                  <label for="ollamaModel" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('ollamaModel')}</label>
                   <input
                     id="ollamaModel"
                     type="text"
@@ -580,7 +745,7 @@
               <!-- API Keys -->
               <div class="flex flex-col gap-2 border-t border-slate-800 pt-4">
                 {#if settings.active_provider === 'openai'}
-                  <label for="openaiKey" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">OpenAI API Key</label>
+                  <label for="openaiKey" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('openaiKey')}</label>
                   <input
                     id="openaiKey"
                     type="password"
@@ -589,7 +754,7 @@
                     class="px-3 py-2 rounded-lg glass-input text-sm"
                   />
                 {:else if settings.active_provider === 'anthropic'}
-                  <label for="anthropicKey" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Anthropic API Key</label>
+                  <label for="anthropicKey" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('anthropicKey')}</label>
                   <input
                     id="anthropicKey"
                     type="password"
@@ -608,7 +773,7 @@
               onmousedown={saveConfig}
               class="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-md shadow-indigo-600/10 transition-colors"
             >
-              Save Configuration
+              {t('saveConfig')}
             </button>
           </div>
         </div>
@@ -626,8 +791,8 @@
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
         </div>
         <div class="space-y-1">
-          <h3 class="text-lg font-semibold text-white">Delete Scan History</h3>
-          <p class="text-sm text-slate-400">Are you sure you want to delete this scan history? This action cannot be undone.</p>
+          <h3 class="text-lg font-semibold text-white">{t('deleteConfirmTitle')}</h3>
+          <p class="text-sm text-slate-400">{t('deleteConfirmMsg')}</p>
         </div>
       </div>
       <div class="flex justify-end gap-3 pt-2">
@@ -635,13 +800,13 @@
           onclick={() => { showDeleteConfirm = false; scanToDelete = null; }}
           class="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors text-sm font-medium"
         >
-          Cancel
+          {t('cancel')}
         </button>
         <button
           onclick={executeDeleteScan}
           class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/20 transition-colors text-sm font-medium"
         >
-          Delete
+          {t('delete')}
         </button>
       </div>
     </div>

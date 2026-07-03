@@ -73,10 +73,17 @@ func (db *DB) GetConfig() (*models.Config, error) {
 				OllamaModel:     "llama3",
 				ActiveProvider:  "ollama",
 				ScanConcurrency: 10,
+				Language:        "auto",
 			}
 			return nil
 		}
-		return json.Unmarshal(data, &cfg)
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return err
+		}
+		if cfg.Language == "" {
+			cfg.Language = "auto"
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
