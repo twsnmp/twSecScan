@@ -1,0 +1,6 @@
+# Dummy SSH Daemon Config for local audit testing
+Protocol 1
+Port 22
+PermitRootLogin yes
+PasswordAuthentication yes
+X11Forwarding yes

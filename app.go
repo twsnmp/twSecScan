@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"twSecScan/modules/ai"
 	"twSecScan/modules/apisec"
 	"twSecScan/modules/osint"
+	"twSecScan/modules/localaudit"
 	"twSecScan/modules/webscanner"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -150,6 +152,8 @@ func (a *App) StartScan(target string, scanType string, extra string) (*models.S
 		go a.runDNSWhoisScan(scan, cfg)
 	} else if scanType == "crypto_scanner" {
 		go a.runCryptoScan(scan, cfg)
+	} else if scanType == "local_audit" {
+		go a.runLocalAuditScan(scan, cfg)
 	} else {
 		go a.runPortScan(scan, cfg)
 	}
@@ -1118,6 +1122,113 @@ func (a *App) runCryptoScan(scan *models.Scan, cfg *models.Config) {
 			Proof:       "Scanned ports returned standard results.",
 			Timestamp:   time.Now(),
 			AIAdvice:    "Continue keeping your certificates renewed and outdated SSL/TLS versions disabled.",
+		}
+		if err := a.database.SaveFinding(finding); err != nil {
+			log.Printf("Failed to save finding: %v", err)
+		}
+		scan.FindingCount["info"]++
+	}
+
+	scan.Status = "completed"
+}
+
+// SelectLocalFolder shows a folder selector dialog to choose a local directory for folder audit
+func (a *App) SelectLocalFolder() (string, error) {
+	if a.wailsCtx == nil {
+		return "", fmt.Errorf("Wails context not initialized")
+	}
+
+	return wailsruntime.OpenDirectoryDialog(a.wailsCtx, wailsruntime.OpenDialogOptions{
+		Title: "Select Folder for Local Audit",
+	})
+}
+
+// runLocalAuditScan performs a local audit on the specified directory path
+func (a *App) runLocalAuditScan(scan *models.Scan, cfg *models.Config) {
+	defer func() {
+		scan.EndTime = time.Now()
+		if err := a.database.SaveScan(scan); err != nil {
+			log.Printf("Failed to save final scan status: %v", err)
+		}
+	}()
+
+	// Verify target exists and is a directory
+	info, err := os.Stat(scan.Target)
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("target directory does not exist: %v", err)
+		return
+	}
+	if !info.IsDir() {
+		scan.Status = "failed"
+		scan.ErrorMsg = "target path is not a directory"
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	auditor := localaudit.NewAuditor()
+	results, err := auditor.Audit(ctx, scan.Target)
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("audit scan failed: %v", err)
+		return
+	}
+
+	// Initialize AI Client if configured
+	var aiClient ai.LLMClient
+	if cfg.ActiveProvider == "ollama" || cfg.APIKeyOpenAI != "" || cfg.APIKeyAnthropic != "" {
+		aiClient, _ = ai.NewClient(cfg)
+	}
+
+	for _, res := range results {
+		findingID := fmt.Sprintf("find_localaudit_%d", time.Now().UnixNano())
+		title := fmt.Sprintf("[%s] %s", res.RuleID, res.Title)
+
+		finding := &models.Finding{
+			ID:          findingID,
+			ScanID:      scan.ID,
+			Target:      scan.Target,
+			Module:      "local_audit",
+			Title:       title,
+			Description: fmt.Sprintf("File: %s\nRule: %s\n\n%s", res.FilePath, res.RuleID, res.Description),
+			Severity:    res.Severity,
+			Proof:       res.Proof,
+			Timestamp:   time.Now(),
+		}
+
+		// Generate AI advice if client is configured
+		if aiClient != nil {
+			advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+			if err == nil {
+				finding.AIAdvice = advice
+			} else {
+				finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+			}
+		} else {
+			finding.AIAdvice = "AI mitigation advice not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+		}
+
+		if err := a.database.SaveFinding(finding); err != nil {
+			log.Printf("Failed to save finding: %v", err)
+		}
+		scan.FindingCount[res.Severity]++
+	}
+
+	if len(results) == 0 {
+		findingID := fmt.Sprintf("find_localaudit_none_%d", time.Now().UnixNano())
+		finding := &models.Finding{
+			ID:          findingID,
+			ScanID:      scan.ID,
+			Target:      scan.Target,
+			Module:      "local_audit",
+			Title:       "Local folder audit passed",
+			Description: "No critical credential exposures, insecure configuration files, or suspicious permissions were detected during the local folder walk.",
+			Severity:    "info",
+			Proof:       "Folder walk completed without findings.",
+			Timestamp:   time.Now(),
+			AIAdvice:    "Keep applying secure configuration and data protection standards.",
 		}
 		if err := a.database.SaveFinding(finding); err != nil {
 			log.Printf("Failed to save finding: %v", err)

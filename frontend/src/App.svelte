@@ -70,14 +70,18 @@
       placeholderTargetAssetAuditor: 'https://example.com',
       placeholderTargetValidationTester: 'https://example.com',
       placeholderTargetTechDetector: 'https://example.com',
+      placeholderTargetLocalAudit: 'Select local folder to audit...',
       typePortScan: 'Port Scan (OSINT)',
       typeWebScan: 'Web Scanner (Links & Headers)',
       typeAssetAuditor: 'Asset Auditor (Directory Scanner)',
       typeValidationTester: 'Validation Tester (XSS/SQLi)',
       typeTechDetector: 'Tech Stack Detector',
       typeAPISec: 'API Fuzzer (OpenAPI)',
+      typeLocalAudit: 'Local Folder Audit (CIS Controls)',
       placeholderTargetAPISec: 'OpenAPI Spec URL or choose local file...',
       scanFootnoteAPISec: 'Parses OpenAPI (Swagger) spec and runs dynamic fuzzing tests on all endpoints.',
+      scanFootnoteLocalAudit: 'Walks the local folder recursively and checks files for secrets, insecure permissions, network/SSH configs, and leftover backups.',
+      selectFolderBtn: 'Choose Folder',
       selectFileBtn: 'Choose Spec File',
       toastSelectFileFailed: 'Failed to choose file: ',
       toastEnterAPITarget: 'Please enter a valid spec URL or select a local OpenAPI specification file.',
@@ -166,14 +170,18 @@
       placeholderTargetAssetAuditor: 'https://example.com',
       placeholderTargetValidationTester: 'https://example.com',
       placeholderTargetTechDetector: 'https://example.com',
+      placeholderTargetLocalAudit: '監査するローカルフォルダを選択してください...',
       typePortScan: 'ポートスキャン (OSINT)',
       typeWebScan: 'Webスキャナー (リンク・ヘッダ検証)',
       typeAssetAuditor: 'アセット監査 (Asset Auditor)',
       typeValidationTester: '入力値検証 (Validation Tester)',
       typeTechDetector: '技術スタック検出',
       typeAPISec: 'APIセキュリティ (OpenAPI)',
+      typeLocalAudit: 'ローカルフォルダ監査 (CIS監査)',
       placeholderTargetAPISec: 'OpenAPI仕様書のURL、またはファイルを選択...',
       scanFootnoteAPISec: 'OpenAPI (Swagger) 仕様書をパースし、各エンドポイントに対して動的なセキュリティ・ファジングテストを実行します。',
+      scanFootnoteLocalAudit: 'ローカルフォルダ配下のファイルを走査し、機密情報の漏洩、危険なパーミッション、不要なバックアップファイル、OS・SSH設定などを監査します。',
+      selectFolderBtn: 'フォルダを選択',
       selectFileBtn: '仕様書を選択',
       toastSelectFileFailed: 'ファイル選択に失敗しました: ',
       toastEnterAPITarget: '有効な仕様書URLを入力するか、ローカルのOpenAPI仕様書ファイルを選択してください。',
@@ -471,6 +479,8 @@
         showToast(t('placeholderTargetDNSWhois'));
       } else if (selectedScanType === 'crypto_scanner') {
         showToast(t('placeholderTargetCryptoScanner'));
+      } else if (selectedScanType === 'local_audit') {
+        showToast(t('placeholderTargetLocalAudit'));
       } else {
         showToast(t('toastEnterTarget'));
       }
@@ -503,6 +513,17 @@
       const filePath = await callBind('SelectOpenAPISpecFile');
       if (filePath) {
         target = filePath;
+      }
+    } catch (e) {
+      showToast(t('toastSelectFileFailed') + e.message);
+    }
+  }
+
+  async function selectLocalFolder() {
+    try {
+      const folderPath = await callBind('SelectLocalFolder');
+      if (folderPath) {
+        target = folderPath;
       }
     } catch (e) {
       showToast(t('toastSelectFileFailed') + e.message);
@@ -830,6 +851,25 @@
                   <p class="text-[9px] text-slate-400 mt-1 truncate">Crypto Scan</p>
                 </div>
               </button>
+
+              <button
+                disabled={scanning}
+                onclick={() => selectedScanType = 'local_audit'}
+                class="group text-left p-3 rounded-xl transition-all border flex flex-col justify-between h-[100px] {selectedScanType === 'local_audit' ? 'bg-indigo-600/20 border-indigo-500 shadow-md shadow-indigo-500/10' : 'bg-slate-900/40 border-slate-800 hover:border-slate-700/80 hover:bg-slate-900/60'}"
+              >
+                <div class="flex items-center justify-between w-full">
+                  <span class="p-1 rounded-lg bg-indigo-500/10 text-indigo-400 group-hover:scale-105 transition-transform">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                  </span>
+                  {#if selectedScanType === 'local_audit'}
+                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 shadow shadow-indigo-400"></span>
+                  {/if}
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-slate-100 leading-tight">{t('typeLocalAudit')}</h4>
+                  <p class="text-[9px] text-slate-400 mt-1 truncate">Folder Audit</p>
+                </div>
+              </button>
             </div>
 
             <!-- Local Test Server Toggle -->
@@ -879,6 +919,8 @@
                     ? t('placeholderTargetDNSWhois')
                     : selectedScanType === 'crypto_scanner'
                     ? t('placeholderTargetCryptoScanner')
+                    : selectedScanType === 'local_audit'
+                    ? t('placeholderTargetLocalAudit')
                     : t('placeholderTarget')
                 }
                 class="flex-1 px-4 py-3 rounded-xl glass-input text-base"
@@ -892,6 +934,16 @@
                   class="px-4 py-3 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 transition-all font-semibold text-xs border border-slate-700/60 shrink-0"
                 >
                   {t('selectFileBtn')}
+                </button>
+              {/if}
+              {#if selectedScanType === 'local_audit'}
+                <button
+                  type="button"
+                  disabled={scanning}
+                  onclick={selectLocalFolder}
+                  class="px-4 py-3 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 transition-all font-semibold text-xs border border-slate-700/60 shrink-0"
+                >
+                  {t('selectFolderBtn')}
                 </button>
               {/if}
               <button
@@ -940,6 +992,10 @@
                 ? t('scanFootnoteAPISec')
                 : selectedScanType === 'dns_whois'
                 ? t('scanFootnoteDNSWhois')
+                : selectedScanType === 'crypto_scanner'
+                ? t('scanFootnoteCryptoScanner')
+                : selectedScanType === 'local_audit'
+                ? t('scanFootnoteLocalAudit')
                 : t('scanFootnote')}
             </div>
           </div>
