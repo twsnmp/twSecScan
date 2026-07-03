@@ -68,11 +68,14 @@
       placeholderTargetPortScan: 'example.com or 192.168.1.1',
       placeholderTargetWebScan: 'https://example.com',
       placeholderTargetAssetAuditor: 'https://example.com',
+      placeholderTargetValidationTester: 'https://example.com',
       typePortScan: 'Port Scan (OSINT)',
       typeWebScan: 'Broken Link Checker (Web Scanner)',
       typeAssetAuditor: 'Asset Auditor (Directory Scanner)',
+      typeValidationTester: 'Validation Tester (XSS/SQLi)',
       scanFootnoteWebScanner: 'Recursively crawls internal pages to detect broken links and dead references.',
       scanFootnoteAssetAuditor: 'Scans for exposed config files, backups, repositories (.git), and administrative consoles.',
+      scanFootnoteValidationTester: 'Crawls pages to find URL parameters and tests them for SQL Injection and XSS vulnerabilities.',
       toastEnterUrl: 'Please enter a valid website URL (must start with http:// or https://).'
     },
     ja: {
@@ -113,7 +116,7 @@
       anthropicKey: 'Anthropic APIキー',
       saveConfig: '設定を保存',
       deleteConfirmTitle: 'スキャン履歴の削除',
-      deleteConfirmMsg: 'このスキャン履歴を削除してもよろしいですか？この操作は取り消せません。',
+      deleteConfirmMsg: 'このスキャン履歴を削除してもよろしいですか？この操作は取り消せるません。',
       cancel: 'キャンセル',
       delete: '削除',
       toastSaveSuccess: '設定を保存しました！',
@@ -140,11 +143,14 @@
       placeholderTargetPortScan: 'example.com または 192.168.1.1',
       placeholderTargetWebScan: 'https://example.com',
       placeholderTargetAssetAuditor: 'https://example.com',
+      placeholderTargetValidationTester: 'https://example.com',
       typePortScan: 'ポートスキャン (OSINT)',
       typeWebScan: 'リンク切れチェッカー (Web Scanner)',
       typeAssetAuditor: 'アセット監査 (Asset Auditor)',
+      typeValidationTester: '入力値検証 (Validation Tester)',
       scanFootnoteWebScanner: '同一ドメイン内の内部リンクを再帰的に巡回し、デッドリンクやリンク切れをチェックします。',
       scanFootnoteAssetAuditor: '公開されている環境変数ファイル（.env）、リポジトリ（.git）、バックアップ、管理画面などを検出します。',
+      scanFootnoteValidationTester: '巡回して取得したURLパラメータに対して、SQL InjectionやXSSの脆弱性をテストします。',
       toastEnterUrl: '有効なWebサイトのURLを入力してください（http:// または https:// で始まる必要があります）。'
     }
   };
@@ -261,6 +267,22 @@
           }
         ];
       }
+      if (args[0] && args[0].includes('validation_tester')) {
+        return [
+          {
+            id: 'find_val_1',
+            scan_id: args[0],
+            target: 'https://example.com',
+            module: 'validation_tester',
+            title: "Input Validation Vulnerability (XSS): q",
+            description: "A potential XSS vulnerability was detected on parameter 'q' of URL https://example.com/search. The payload '<script>alert(1)</' + 'script>' resulted in lack of sanitization or error exposure.",
+            severity: "high",
+            proof: "XSS payload reflected directly in response: <script>alert(1)</" + "script>",
+            ai_advice: "HTML encode query parameter values before inserting them into the DOM/response output.",
+            timestamp: new Date().toISOString()
+          }
+        ];
+      }
       return [
         {
           id: 'find_80',
@@ -367,7 +389,7 @@
     lastScanTime = now;
 
     if (!target) {
-      if (selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor') {
+      if (selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor' || selectedScanType === 'validation_tester') {
         showToast(t('toastEnterUrl'));
       } else {
         showToast(t('toastEnterTarget'));
@@ -375,7 +397,7 @@
       return;
     }
 
-    if ((selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor') && !target.startsWith('http://') && !target.startsWith('https://')) {
+    if ((selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor' || selectedScanType === 'validation_tester') && !target.startsWith('http://') && !target.startsWith('https://')) {
       showToast(t('toastEnterUrl'));
       return;
     }
@@ -553,6 +575,13 @@
               >
                 {t('typeAssetAuditor')}
               </button>
+              <button
+                disabled={scanning}
+                onclick={() => selectedScanType = 'validation_tester'}
+                class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all {selectedScanType === 'validation_tester' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
+              >
+                {t('typeValidationTester')}
+              </button>
             </div>
 
             <div class="flex gap-4">
@@ -565,6 +594,8 @@
                     ? t('placeholderTargetWebScan') 
                     : selectedScanType === 'asset_auditor'
                     ? t('placeholderTargetAssetAuditor')
+                    : selectedScanType === 'validation_tester'
+                    ? t('placeholderTargetValidationTester')
                     : t('placeholderTarget')
                 }
                 class="flex-1 px-4 py-3 rounded-xl glass-input text-base"
@@ -578,8 +609,8 @@
               >
                 {#if scanning}
                   <svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                   </svg>
                   {t('scanning')}
                 {:else}
@@ -594,6 +625,8 @@
                 ? t('scanFootnoteWebScanner') 
                 : selectedScanType === 'asset_auditor'
                 ? t('scanFootnoteAssetAuditor')
+                : selectedScanType === 'validation_tester'
+                ? t('scanFootnoteValidationTester')
                 : t('scanFootnote')}
             </div>
           </div>

@@ -132,6 +132,8 @@ func (a *App) StartScan(target string, scanType string) (*models.Scan, error) {
 		go a.runWebScan(scan, cfg)
 	} else if scanType == "asset_auditor" {
 		go a.runAssetAuditScan(scan, cfg)
+	} else if scanType == "validation_tester" {
+		go a.runValidationTesterScan(scan, cfg)
 	} else {
 		go a.runPortScan(scan, cfg)
 	}
@@ -424,3 +426,116 @@ func (a *App) runAssetAuditScan(scan *models.Scan, cfg *models.Config) {
 
 	scan.Status = "completed"
 }
+
+func (a *App) runValidationTesterScan(scan *models.Scan, cfg *models.Config) {
+	defer func() {
+		scan.EndTime = time.Now()
+		if err := a.database.SaveScan(scan); err != nil {
+			log.Printf("Failed to save final scan status: %v", err)
+		}
+	}()
+
+	concurrency := cfg.ScanConcurrency
+	if concurrency <= 0 {
+		concurrency = 4
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	// 1. Run crawler to discover URLs
+	crawler := webscanner.NewCrawler()
+	resultsChan, err := crawler.Start(ctx, scan.Target, webscanner.Options{
+		Concurrency: concurrency,
+		Timeout:     5 * time.Second,
+		UserAgent:   "twSecScan-ValidationCrawler/1.0",
+	})
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("failed to start crawler: %v", err)
+		return
+	}
+
+	var urlsToTest []string
+	// Include the start URL itself
+	urlsToTest = append(urlsToTest, scan.Target)
+
+	for res := range resultsChan {
+		// Collect unique successfully visited internal URLs
+		if !res.Broken && res.Internal {
+			urlsToTest = append(urlsToTest, res.URL)
+		}
+	}
+
+	// Remove duplicates
+	uniqueURLs := make(map[string]bool)
+	var finalURLs []string
+	for _, u := range urlsToTest {
+		if !uniqueURLs[u] {
+			uniqueURLs[u] = true
+			finalURLs = append(finalURLs, u)
+		}
+	}
+
+	// 2. Run ValidationTester on discovered URLs
+	tester := webscanner.NewValidationTester()
+	valResultsChan, err := tester.Start(ctx, finalURLs, webscanner.ValidationOptions{
+		Concurrency: concurrency,
+		Timeout:     5 * time.Second,
+		UserAgent:   "twSecScan-ValidationTester/1.0",
+	})
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("failed to start validation tester: %v", err)
+		return
+	}
+
+	// Initialize AI Client if configured
+	var aiClient ai.LLMClient
+	if cfg.ActiveProvider == "ollama" || cfg.APIKeyOpenAI != "" || cfg.APIKeyAnthropic != "" {
+		aiClient, _ = ai.NewClient(cfg)
+	}
+
+	for res := range valResultsChan {
+		if res.Vulnerable {
+			findingID := fmt.Sprintf("find_val_%d", time.Now().UnixNano())
+			title := fmt.Sprintf("Input Validation Vulnerability (%s): %s", res.VulnerabilityType, res.Parameter)
+			
+			desc := fmt.Sprintf("A potential %s vulnerability was detected on parameter '%s' of URL %s. The payload '%s' resulted in lack of sanitization or error exposure.", 
+				res.VulnerabilityType, res.Parameter, res.URL, res.Payload)
+			
+			finding := &models.Finding{
+				ID:          findingID,
+				ScanID:      scan.ID,
+				Target:      scan.Target,
+				Module:      "validation_tester",
+				Title:       title,
+				Description: desc,
+				Severity:    res.Severity,
+				Proof:       res.Proof,
+				Timestamp:   time.Now(),
+			}
+
+			// Generate AI advice if client is configured
+			if aiClient != nil {
+				advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+				if err == nil {
+					finding.AIAdvice = advice
+				} else {
+					finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+				}
+			} else {
+				finding.AIAdvice = "AI analysis not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+			}
+
+			if err := a.database.SaveFinding(finding); err != nil {
+				log.Printf("Failed to save finding: %v", err)
+			}
+
+			scan.FindingCount[res.Severity]++
+		}
+	}
+
+	scan.Status = "completed"
+}
+
