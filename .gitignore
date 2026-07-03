@@ -30,3 +30,20 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Wails build outputs and logs
+/build/bin/
+/build/windows/
+/build/darwin/
+/build/linux/
+
+# Local database
+/*.db
+
+# Main binary
+/twSecScan
+
+# Frontend build outputs
+/frontend/dist/
+/frontend/node_modules/
+/frontend/wailsjs/

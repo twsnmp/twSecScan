@@ -1,0 +1,12 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "twSecScan",
+  "outputfilename": "twSecScan",
+  "frontend:dir": "frontend",
+  "frontend:cmd:install": "npm install",
+  "frontend:cmd:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "http://localhost:34116",
+  "devserver": "localhost:34117",
+  "author": { "name": "twsnmp-style-developer" }
+}
