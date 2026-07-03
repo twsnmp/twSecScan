@@ -22,6 +22,7 @@ type LinkResult struct {
 	Duration   time.Duration `json:"duration"`
 	Broken     bool          `json:"broken"`
 	Internal   bool          `json:"internal"`
+	HeaderFindings []HeaderFinding `json:"headerFindings,omitempty"`
 }
 
 // Options configures the crawler's execution.
@@ -178,13 +179,17 @@ func (c *Crawler) processJob(ctx context.Context, job crawlJob, enqueue func(str
 
 	broken := resp.StatusCode >= 400
 
+	// Check HTTP headers for security issues or leaks
+	headerFindings := CheckHeaders(job.url, resp.Header)
+
 	resultsChan <- LinkResult{
-		URL:        job.url,
-		Source:     job.source,
-		StatusCode: resp.StatusCode,
-		Duration:   duration,
-		Broken:     broken,
-		Internal:   isInternal,
+		URL:            job.url,
+		Source:         job.source,
+		StatusCode:     resp.StatusCode,
+		Duration:       duration,
+		Broken:         broken,
+		Internal:       isInternal,
+		HeaderFindings: headerFindings,
 	}
 
 	// Only parse HTML and follow links if it's internal, not broken, and contains HTML.

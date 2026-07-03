@@ -349,6 +349,46 @@ func (a *App) runWebScan(scan *models.Scan, cfg *models.Config) {
 
 			scan.FindingCount[severity]++
 		}
+
+		// Process HTTP header findings
+		for _, hf := range res.HeaderFindings {
+			findingID := fmt.Sprintf("find_header_%d", time.Now().UnixNano())
+			title := fmt.Sprintf("HTTP Header Issue (%s): %s", hf.Status, hf.Header)
+			
+			desc := fmt.Sprintf("An HTTP header vulnerability was detected on %s.\nHeader: %s\nStatus: %s\nDescription: %s", 
+				res.URL, hf.Header, hf.Status, hf.Description)
+			proof := fmt.Sprintf("URL: %s\nFinding Details: %s\nProof: %s", res.URL, hf.Description, hf.Proof)
+
+			finding := &models.Finding{
+				ID:          findingID,
+				ScanID:      scan.ID,
+				Target:      scan.Target,
+				Module:      "webscanner",
+				Title:       title,
+				Description: desc,
+				Severity:    hf.Severity,
+				Proof:       proof,
+				Timestamp:   time.Now(),
+			}
+
+			// Generate AI advice if client is configured
+			if aiClient != nil {
+				advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+				if err == nil {
+					finding.AIAdvice = advice
+				} else {
+					finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+				}
+			} else {
+				finding.AIAdvice = "AI analysis not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+			}
+
+			if err := a.database.SaveFinding(finding); err != nil {
+				log.Printf("Failed to save finding: %v", err)
+			}
+
+			scan.FindingCount[hf.Severity]++
+		}
 	}
 
 	scan.Status = "completed"
