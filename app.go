@@ -144,6 +144,8 @@ func (a *App) StartScan(target string, scanType string, extra string) (*models.S
 		go a.runValidationTesterScan(scan, cfg)
 	} else if scanType == "apisec" {
 		go a.runAPISecScan(scan, cfg, extra)
+	} else if scanType == "dns_whois" {
+		go a.runDNSWhoisScan(scan, cfg)
 	} else {
 		go a.runPortScan(scan, cfg)
 	}
@@ -667,6 +669,144 @@ func (a *App) runAPISecScan(scan *models.Scan, cfg *models.Config, customBaseURL
 
 			scan.FindingCount[res.Severity]++
 		}
+	}
+
+	scan.Status = "completed"
+}
+
+func (a *App) runDNSWhoisScan(scan *models.Scan, cfg *models.Config) {
+	defer func() {
+		scan.EndTime = time.Now()
+		if err := a.database.SaveScan(scan); err != nil {
+			log.Printf("Failed to save final scan status: %v", err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	host := scan.Target
+	if u, err := url.Parse(scan.Target); err == nil && u.Host != "" {
+		host = u.Hostname()
+	} else if h, _, err := net.SplitHostPort(scan.Target); err == nil {
+		host = h
+	}
+
+	// 1. DNS Lookup
+	dnsRecords, err := osint.LookupDNS(ctx, host)
+	if err == nil {
+		var detailLines []string
+		if len(dnsRecords.A) > 0 {
+			detailLines = append(detailLines, fmt.Sprintf("A Records: %s", strings.Join(dnsRecords.A, ", ")))
+		}
+		if len(dnsRecords.AAAA) > 0 {
+			detailLines = append(detailLines, fmt.Sprintf("AAAA Records: %s", strings.Join(dnsRecords.AAAA, ", ")))
+		}
+		if len(dnsRecords.MX) > 0 {
+			detailLines = append(detailLines, fmt.Sprintf("MX Records: %s", strings.Join(dnsRecords.MX, ", ")))
+		}
+		if len(dnsRecords.TXT) > 0 {
+			detailLines = append(detailLines, fmt.Sprintf("TXT Records: %s", strings.Join(dnsRecords.TXT, ", ")))
+		}
+		if len(dnsRecords.NS) > 0 {
+			detailLines = append(detailLines, fmt.Sprintf("NS Records: %s", strings.Join(dnsRecords.NS, ", ")))
+		}
+		if dnsRecords.CNAME != "" {
+			detailLines = append(detailLines, fmt.Sprintf("CNAME Record: %s", dnsRecords.CNAME))
+		}
+
+		findingID := fmt.Sprintf("find_dns_%d", time.Now().UnixNano())
+		title := fmt.Sprintf("DNS Records for %s", host)
+		desc := "DNS query completed successfully. Retreived DNS records configuration."
+		proof := strings.Join(detailLines, " | ")
+		if proof == "" {
+			proof = "No DNS records resolved."
+		}
+
+		finding := &models.Finding{
+			ID:          findingID,
+			ScanID:      scan.ID,
+			Target:      scan.Target,
+			Module:      "dns_whois",
+			Title:       title,
+			Description: desc,
+			Severity:    "info",
+			Proof:       proof,
+			Timestamp:   time.Now(),
+		}
+
+		// Initialize AI Client if configured
+		var aiClient ai.LLMClient
+		if cfg.ActiveProvider == "ollama" || cfg.APIKeyOpenAI != "" || cfg.APIKeyAnthropic != "" {
+			aiClient, _ = ai.NewClient(cfg)
+		}
+
+		if aiClient != nil {
+			advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+			if err == nil {
+				finding.AIAdvice = advice
+			} else {
+				finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+			}
+		} else {
+			finding.AIAdvice = "AI analysis not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+		}
+
+		if err := a.database.SaveFinding(finding); err != nil {
+			log.Printf("Failed to save finding: %v", err)
+		}
+		scan.FindingCount["info"]++
+	} else {
+		log.Printf("DNS Lookup failed: %v", err)
+	}
+
+	// 2. WHOIS Lookup
+	whoisRaw, err := osint.QueryWHOIS(ctx, host)
+	if err == nil {
+		findingID := fmt.Sprintf("find_whois_%d", time.Now().UnixNano())
+		title := fmt.Sprintf("WHOIS Information for %s", host)
+		desc := "WHOIS registration lookup completed successfully."
+		proof := whoisRaw
+		if len(proof) > 4000 {
+			proof = proof[:4000] + "\n... [Truncated due to size]"
+		}
+
+		finding := &models.Finding{
+			ID:          findingID,
+			ScanID:      scan.ID,
+			Target:      scan.Target,
+			Module:      "dns_whois",
+			Title:       title,
+			Description: desc,
+			Severity:    "info",
+			Proof:       proof,
+			Timestamp:   time.Now(),
+		}
+
+		// Initialize AI Client if configured
+		var aiClient ai.LLMClient
+		if cfg.ActiveProvider == "ollama" || cfg.APIKeyOpenAI != "" || cfg.APIKeyAnthropic != "" {
+			aiClient, _ = ai.NewClient(cfg)
+		}
+
+		if aiClient != nil {
+			// Ask AI to analyze whois raw data
+			advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+			if err == nil {
+				finding.AIAdvice = advice
+			} else {
+				finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+			}
+		} else {
+			finding.AIAdvice = "AI analysis not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+		}
+
+		if err := a.database.SaveFinding(finding); err != nil {
+			log.Printf("Failed to save finding: %v", err)
+		}
+		scan.FindingCount["info"]++
+	} else {
+		log.Printf("WHOIS Lookup failed: %v", err)
 	}
 
 	scan.Status = "completed"

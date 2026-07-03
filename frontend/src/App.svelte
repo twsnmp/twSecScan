@@ -84,6 +84,9 @@
       scanFootnoteWebScanner: 'Recursively crawls internal pages to detect broken links and dead references.',
       scanFootnoteAssetAuditor: 'Scans for exposed config files, backups, repositories (.git), and administrative consoles.',
       scanFootnoteValidationTester: 'Crawls pages to find URL parameters and tests them for SQL Injection and XSS vulnerabilities.',
+      scanFootnoteDNSWhois: 'Queries standard DNS records and fetches WHOIS registrar info with AI audit advice.',
+      placeholderTargetDNSWhois: 'example.com or sub.example.com',
+      typeDNSWhois: 'DNS & WHOIS (OSINT)',
       toastEnterUrl: 'Please enter a valid website URL (must start with http:// or https://).',
       testServerTitle: 'Local Test Server for Development',
       testServerDesc: 'Runs a mock local server simulating vulnerabilities (port 8081-8089) for safe testing.',
@@ -311,6 +314,34 @@
           }
         ];
       }
+      if (args[0] && args[0].includes('dns_whois')) {
+        return [
+          {
+            id: 'find_dns_1',
+            scan_id: args[0],
+            target: 'example.com',
+            module: 'dns_whois',
+            title: 'DNS Records for example.com',
+            description: 'DNS query completed successfully. Retreived DNS records configuration.',
+            severity: 'info',
+            proof: 'A Records: 93.184.215.14 | MX Records: mail.example.com (preference: 10)',
+            ai_advice: 'The DNS records appear basic. Consider setting up SPF and DMARC TXT records to prevent email spoofing.',
+            timestamp: new Date().toISOString()
+          },
+          {
+            id: 'find_whois_1',
+            scan_id: args[0],
+            target: 'example.com',
+            module: 'dns_whois',
+            title: 'WHOIS Information for example.com',
+            description: 'WHOIS registration lookup completed successfully.',
+            severity: 'info',
+            proof: 'Domain Name: EXAMPLE.COM\nRegistry Domain ID: 2336797_DOMAIN_COM-VRSN\nRegistrar: RESERVED-Internet Assigned Numbers Authority',
+            ai_advice: 'Ensure domain auto-renew is enabled to prevent accidental expiration.',
+            timestamp: new Date().toISOString()
+          }
+        ];
+      }
       return [
         {
           id: 'find_80',
@@ -424,6 +455,8 @@
         showToast(t('toastEnterUrl'));
       } else if (selectedScanType === 'apisec') {
         showToast(t('toastEnterAPITarget'));
+      } else if (selectedScanType === 'dns_whois') {
+        showToast(t('placeholderTargetDNSWhois'));
       } else {
         showToast(t('toastEnterTarget'));
       }
@@ -667,6 +700,13 @@
               >
                 {t('typeAPISec')}
               </button>
+              <button
+                disabled={scanning}
+                onclick={() => selectedScanType = 'dns_whois'}
+                class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all {selectedScanType === 'dns_whois' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
+              >
+                {t('typeDNSWhois')}
+              </button>
             </div>
 
             <!-- Local Test Server Toggle -->
@@ -710,6 +750,8 @@
                     ? t('placeholderTargetValidationTester')
                     : selectedScanType === 'apisec'
                     ? t('placeholderTargetAPISec')
+                    : selectedScanType === 'dns_whois'
+                    ? t('placeholderTargetDNSWhois')
                     : t('placeholderTarget')
                 }
                 class="flex-1 px-4 py-3 rounded-xl glass-input text-base"
@@ -767,6 +809,8 @@
                 ? t('scanFootnoteValidationTester')
                 : selectedScanType === 'apisec'
                 ? t('scanFootnoteAPISec')
+                : selectedScanType === 'dns_whois'
+                ? t('scanFootnoteDNSWhois')
                 : t('scanFootnote')}
             </div>
           </div>
