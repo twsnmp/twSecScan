@@ -76,7 +76,11 @@
       scanFootnoteWebScanner: 'Recursively crawls internal pages to detect broken links and dead references.',
       scanFootnoteAssetAuditor: 'Scans for exposed config files, backups, repositories (.git), and administrative consoles.',
       scanFootnoteValidationTester: 'Crawls pages to find URL parameters and tests them for SQL Injection and XSS vulnerabilities.',
-      toastEnterUrl: 'Please enter a valid website URL (must start with http:// or https://).'
+      toastEnterUrl: 'Please enter a valid website URL (must start with http:// or https://).',
+      testServerTitle: 'Local Test Server for Development',
+      testServerDesc: 'Runs a mock local server simulating vulnerabilities (port 8081-8089) for safe testing.',
+      testServerStatus: 'Test Server Status: ',
+      testServerSetTarget: 'Set as Target'
     },
     ja: {
       brandSub: 'AI搭載セキュリティスイート',
@@ -151,7 +155,11 @@
       scanFootnoteWebScanner: '同一ドメイン内の内部リンクを再帰的に巡回し、デッドリンクやリンク切れをチェックします。',
       scanFootnoteAssetAuditor: '公開されている環境変数ファイル（.env）、リポジトリ（.git）、バックアップ、管理画面などを検出します。',
       scanFootnoteValidationTester: '巡回して取得したURLパラメータに対して、SQL InjectionやXSSの脆弱性をテストします。',
-      toastEnterUrl: '有効なWebサイトのURLを入力してください（http:// または https:// で始まる必要があります）。'
+      toastEnterUrl: '有効なWebサイトのURLを入力してください（http:// または https:// で始まる必要があります）。',
+      testServerTitle: '開発用ローカル・テストサーバー',
+      testServerDesc: '構成ミスや入力バリデーションの動作をエミュレートするテストサーバー（ポート8081-8089）を起動・停止します。',
+      testServerStatus: 'テストサーバーの状態: ',
+      testServerSetTarget: 'ターゲットに設定'
     }
   };
 
@@ -176,6 +184,9 @@
   let searchHistoryQuery = $state('');
   let showDeleteConfirm = $state(false);
   let scanToDelete = $state(null);
+  let testServerEnabled = $state(false);
+  let testServerUrl = $state('');
+  let togglingTestServer = $state(false);
 
   // Derived active language
   let activeLang = $derived.by(() => {
@@ -319,6 +330,9 @@
         start_time: new Date().toISOString(),
         finding_count: {}
       };
+    }
+    if (method === 'ToggleTestServer') {
+      return args[0] ? 'http://localhost:8081' : '';
     }
     return null;
   }
@@ -472,6 +486,33 @@
     }
   }
 
+  async function toggleTestServer() {
+    if (togglingTestServer) return;
+    togglingTestServer = true;
+    const nextState = !testServerEnabled;
+    try {
+      const res = await callBind('ToggleTestServer', nextState);
+      testServerEnabled = nextState;
+      testServerUrl = res || '';
+      if (testServerEnabled && testServerUrl) {
+        showToast(`Test Server running at ${testServerUrl}`);
+      } else {
+        showToast('Test Server stopped.');
+      }
+    } catch (e) {
+      showToast(`Failed to toggle test server: ${e.message}`);
+    } finally {
+      togglingTestServer = false;
+    }
+  }
+
+  function setTestServerAsTarget() {
+    if (testServerUrl) {
+      target = testServerUrl;
+      showToast(`Target set to ${testServerUrl}`);
+    }
+  }
+
   onMount(() => {
     loadConfig();
     loadHistory();
@@ -582,6 +623,33 @@
               >
                 {t('typeValidationTester')}
               </button>
+            </div>
+
+            <!-- Local Test Server Toggle -->
+            <div class="p-4 bg-slate-900/40 rounded-xl border border-slate-800/60 flex items-center justify-between">
+              <div class="space-y-1 pr-4">
+                <h4 class="text-xs font-semibold text-slate-200">{t('testServerTitle')}</h4>
+                <p class="text-[11px] text-slate-400 leading-normal">{t('testServerDesc')}</p>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                {#if testServerEnabled}
+                  <span class="text-xs text-indigo-400 font-medium font-mono">{testServerUrl}</span>
+                  <button 
+                    onclick={setTestServerAsTarget} 
+                    class="px-2.5 py-1 text-[11px] font-semibold bg-indigo-600/30 text-indigo-300 rounded hover:bg-indigo-600/50 transition-colors"
+                  >
+                    {t('testServerSetTarget')}
+                  </button>
+                {/if}
+                <button
+                  onclick={toggleTestServer}
+                  disabled={togglingTestServer}
+                  aria-label="Toggle Local Test Server"
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 {testServerEnabled ? 'bg-indigo-600' : 'bg-slate-700'}"
+                >
+                  <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {testServerEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
+                </button>
+              </div>
             </div>
 
             <div class="flex gap-4">

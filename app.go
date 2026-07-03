@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -19,15 +20,18 @@ import (
 
 // App struct
 type App struct {
-	ctx      context.Context
-	wailsCtx context.Context
-	database *db.DB
-	mu       sync.Mutex
+	ctx        context.Context
+	wailsCtx   context.Context
+	database   *db.DB
+	mu         sync.Mutex
+	testServer *webscanner.TestServer
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	return &App{}
+	return &App{
+		testServer: webscanner.NewTestServer(),
+	}
 }
 
 // startup is called when the app starts. The context is saved
@@ -149,8 +153,15 @@ func (a *App) runPortScan(scan *models.Scan, cfg *models.Config) {
 		}
 	}()
 
-	// Resolve host to ensure we can connect
-	_, err := net.LookupHost(scan.Target)
+	// Resolve host to ensure we can connect. If target is a URL or has port details, extract hostname.
+	host := scan.Target
+	if u, err := url.Parse(scan.Target); err == nil && u.Host != "" {
+		host = u.Hostname()
+	} else if h, _, err := net.SplitHostPort(scan.Target); err == nil {
+		host = h
+	}
+
+	_, err := net.LookupHost(host)
 	if err != nil {
 		scan.Status = "failed"
 		scan.ErrorMsg = fmt.Sprintf("failed to resolve target: %v", err)
@@ -537,5 +548,29 @@ func (a *App) runValidationTesterScan(scan *models.Scan, cfg *models.Config) {
 	}
 
 	scan.Status = "completed"
+}
+
+// ToggleTestServer handles starting and stopping the local mock vulnerability server.
+func (a *App) ToggleTestServer(enable bool) (string, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.testServer == nil {
+		a.testServer = webscanner.NewTestServer()
+	}
+
+	if enable {
+		addr, err := a.testServer.Start()
+		if err != nil {
+			return "", err
+		}
+		return addr, nil
+	} else {
+		err := a.testServer.Stop()
+		if err != nil {
+			return "", err
+		}
+		return "", nil
+	}
 }
 
