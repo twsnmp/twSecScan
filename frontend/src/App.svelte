@@ -124,7 +124,12 @@
     }
   }
 
+  let lastSaveTime = 0;
   async function saveConfig() {
+    const now = Date.now();
+    if (now - lastSaveTime < 300) return;
+    lastSaveTime = now;
+
     try {
       await callBind('SaveConfig', {
         api_key_openai: settings.api_key_openai,
@@ -151,7 +156,12 @@
     }
   }
 
+  let lastScanTime = 0;
   async function triggerScan() {
+    const now = Date.now();
+    if (now - lastScanTime < 300) return;
+    lastScanTime = now;
+
     if (!target) {
       showToast('Please enter a target IP or domain.');
       return;
@@ -313,9 +323,11 @@
                 disabled={scanning}
                 placeholder="example.com or 192.168.1.1"
                 class="flex-1 px-4 py-3 rounded-xl glass-input text-base"
+                onkeydown={(e) => e.key === 'Enter' && triggerScan()}
               />
               <button
                 onclick={triggerScan}
+                onmousedown={triggerScan}
                 disabled={scanning}
                 class="px-8 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-medium shadow-md shadow-indigo-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -590,6 +602,7 @@
           <div class="border-t border-slate-700/50 pt-6 flex justify-end">
             <button
               onclick={saveConfig}
+              onmousedown={saveConfig}
               class="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-md shadow-indigo-600/10 transition-colors"
             >
               Save Configuration
