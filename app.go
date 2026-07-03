@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
 	"twSecScan/core/db"
 	"twSecScan/core/models"
+	"twSecScan/embed"
 	"twSecScan/modules/ai"
 	"twSecScan/modules/osint"
+	"twSecScan/modules/webscanner"
 )
 
 // App struct
@@ -95,8 +98,8 @@ func (a *App) DeleteScan(scanID string) error {
 	return a.database.DeleteScan(scanID)
 }
 
-// StartScan triggers a port scan asynchronously
-func (a *App) StartScan(target string) (*models.Scan, error) {
+// StartScan triggers a vulnerability scan (port scan or web scan) asynchronously
+func (a *App) StartScan(target string, scanType string) (*models.Scan, error) {
 	if a.database == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -124,13 +127,19 @@ func (a *App) StartScan(target string) (*models.Scan, error) {
 		return nil, err
 	}
 
-	// Run scan in the background
-	go a.runScanJob(scan, cfg)
+	// Run scan in the background depending on type
+	if scanType == "webscanner" {
+		go a.runWebScan(scan, cfg)
+	} else if scanType == "asset_auditor" {
+		go a.runAssetAuditScan(scan, cfg)
+	} else {
+		go a.runPortScan(scan, cfg)
+	}
 
 	return scan, nil
 }
 
-func (a *App) runScanJob(scan *models.Scan, cfg *models.Config) {
+func (a *App) runPortScan(scan *models.Scan, cfg *models.Config) {
 	defer func() {
 		scan.EndTime = time.Now()
 		if err := a.database.SaveScan(scan); err != nil {
@@ -219,6 +228,198 @@ func (a *App) runScanJob(scan *models.Scan, cfg *models.Config) {
 		}
 
 		scan.FindingCount[severity]++
+	}
+
+	scan.Status = "completed"
+}
+
+func (a *App) runWebScan(scan *models.Scan, cfg *models.Config) {
+	defer func() {
+		scan.EndTime = time.Now()
+		if err := a.database.SaveScan(scan); err != nil {
+			log.Printf("Failed to save final scan status: %v", err)
+		}
+	}()
+
+	concurrency := cfg.ScanConcurrency
+	if concurrency <= 0 {
+		concurrency = 4
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	crawler := webscanner.NewCrawler()
+	resultsChan, err := crawler.Start(ctx, scan.Target, webscanner.Options{
+		Concurrency: concurrency,
+		Timeout:     5 * time.Second,
+		UserAgent:   "twSecScan-BrokenLinkChecker/1.0",
+	})
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("failed to start crawler: %v", err)
+		return
+	}
+
+	// Initialize AI Client if configured
+	var aiClient ai.LLMClient
+	if cfg.ActiveProvider == "ollama" || cfg.APIKeyOpenAI != "" || cfg.APIKeyAnthropic != "" {
+		aiClient, _ = ai.NewClient(cfg)
+	}
+
+	for res := range resultsChan {
+		if res.Broken {
+			severity := "medium"
+			if !res.Internal {
+				severity = "low"
+			}
+
+			findingID := fmt.Sprintf("find_link_%d", time.Now().UnixNano())
+			title := fmt.Sprintf("Broken Link Detected: %s", res.URL)
+
+			var linkType string
+			if res.Internal {
+				linkType = "Internal"
+			} else {
+				linkType = "External"
+			}
+
+			var reason string
+			if res.StatusCode > 0 {
+				reason = fmt.Sprintf("returned HTTP status code %d", res.StatusCode)
+			} else if res.Error != "" {
+				reason = fmt.Sprintf("failed with error: %s", res.Error)
+			} else {
+				reason = "failed to fetch"
+			}
+
+			desc := fmt.Sprintf("%s link check failed. The URL %s is broken/dead. It %s. Found on page: %s", linkType, res.URL, reason, res.Source)
+			proof := fmt.Sprintf("Status Code: %d, Error: %s, Source: %s", res.StatusCode, res.Error, res.Source)
+
+			finding := &models.Finding{
+				ID:          findingID,
+				ScanID:      scan.ID,
+				Target:      scan.Target,
+				Module:      "webscanner",
+				Title:       title,
+				Description: desc,
+				Severity:    severity,
+				Proof:       proof,
+				Timestamp:   time.Now(),
+			}
+
+			// Generate AI advice if client is configured
+			if aiClient != nil {
+				advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+				if err == nil {
+					finding.AIAdvice = advice
+				} else {
+					finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+				}
+			} else {
+				finding.AIAdvice = "AI analysis not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+			}
+
+			if err := a.database.SaveFinding(finding); err != nil {
+				log.Printf("Failed to save finding: %v", err)
+			}
+
+			scan.FindingCount[severity]++
+		}
+	}
+
+	scan.Status = "completed"
+}
+
+func (a *App) runAssetAuditScan(scan *models.Scan, cfg *models.Config) {
+	defer func() {
+		scan.EndTime = time.Now()
+		if err := a.database.SaveScan(scan); err != nil {
+			log.Printf("Failed to save final scan status: %v", err)
+		}
+	}()
+
+	paths, err := embed.GetDirectoryWordlist()
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("failed to load directory wordlist: %v", err)
+		return
+	}
+
+	concurrency := cfg.ScanConcurrency
+	if concurrency <= 0 {
+		concurrency = 4
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	auditor := webscanner.NewAssetAuditor()
+	// Set a reasonable request delay to respect target server resources (e.g. 100ms)
+	resultsChan, err := auditor.Start(ctx, scan.Target, paths, webscanner.AuditOptions{
+		Concurrency: concurrency,
+		Timeout:     5 * time.Second,
+		Delay:       100 * time.Millisecond,
+	})
+	if err != nil {
+		scan.Status = "failed"
+		scan.ErrorMsg = fmt.Sprintf("failed to start asset auditor: %v", err)
+		return
+	}
+
+	// Initialize AI Client if configured
+	var aiClient ai.LLMClient
+	if cfg.ActiveProvider == "ollama" || cfg.APIKeyOpenAI != "" || cfg.APIKeyAnthropic != "" {
+		aiClient, _ = ai.NewClient(cfg)
+	}
+
+	for res := range resultsChan {
+		if res.Exposed {
+			findingID := fmt.Sprintf("find_audit_%d", time.Now().UnixNano())
+			title := fmt.Sprintf("Exposed Configuration or Asset: %s", res.Path)
+
+			var details string
+			if res.StatusCode == http.StatusOK {
+				details = "The path is publicly accessible (HTTP 200 OK), which might expose sensitive data, backups, or system directories."
+			} else if res.StatusCode == http.StatusForbidden {
+				details = "Access to the path is forbidden (HTTP 403 Forbidden). While direct access is blocked, its existence is confirmed, which can assist attackers in mapping the directory structure."
+			} else {
+				details = fmt.Sprintf("The path returned HTTP status code %d.", res.StatusCode)
+			}
+
+			desc := fmt.Sprintf("Asset auditing detected an exposed directory or file resource. Path: %s. URL: %s. Details: %s", res.Path, res.URL, details)
+			proof := fmt.Sprintf("Path: %s, Status Code: %d", res.Path, res.StatusCode)
+
+			finding := &models.Finding{
+				ID:          findingID,
+				ScanID:      scan.ID,
+				Target:      scan.Target,
+				Module:      "asset_auditor",
+				Title:       title,
+				Description: desc,
+				Severity:    res.Severity,
+				Proof:       proof,
+				Timestamp:   time.Now(),
+			}
+
+			// Generate AI advice if client is configured
+			if aiClient != nil {
+				advice, err := aiClient.AnalyzeFinding(ctx, finding.Target, finding.Title, finding.Description, finding.Proof)
+				if err == nil {
+					finding.AIAdvice = advice
+				} else {
+					finding.AIAdvice = fmt.Sprintf("AI advice generation failed: %v", err)
+				}
+			} else {
+				finding.AIAdvice = "AI analysis not configured. Set up Ollama/OpenAI/Anthropic in Settings."
+			}
+
+			if err := a.database.SaveFinding(finding); err != nil {
+				log.Printf("Failed to save finding: %v", err)
+			}
+
+			scan.FindingCount[res.Severity]++
+		}
 	}
 
 	scan.Status = "completed"

@@ -63,7 +63,17 @@
       sevHigh: 'High',
       sevMedium: 'Medium',
       sevLow: 'Low',
-      sevInfo: 'Info'
+      sevInfo: 'Info',
+      scanType: 'Scan Module',
+      placeholderTargetPortScan: 'example.com or 192.168.1.1',
+      placeholderTargetWebScan: 'https://example.com',
+      placeholderTargetAssetAuditor: 'https://example.com',
+      typePortScan: 'Port Scan (OSINT)',
+      typeWebScan: 'Broken Link Checker (Web Scanner)',
+      typeAssetAuditor: 'Asset Auditor (Directory Scanner)',
+      scanFootnoteWebScanner: 'Recursively crawls internal pages to detect broken links and dead references.',
+      scanFootnoteAssetAuditor: 'Scans for exposed config files, backups, repositories (.git), and administrative consoles.',
+      toastEnterUrl: 'Please enter a valid website URL (must start with http:// or https://).'
     },
     ja: {
       brandSub: 'AI搭載セキュリティスイート',
@@ -125,13 +135,24 @@
       sevHigh: '高',
       sevMedium: '中',
       sevLow: '低',
-      sevInfo: '情報'
+      sevInfo: '情報',
+      scanType: 'スキャンモジュール',
+      placeholderTargetPortScan: 'example.com または 192.168.1.1',
+      placeholderTargetWebScan: 'https://example.com',
+      placeholderTargetAssetAuditor: 'https://example.com',
+      typePortScan: 'ポートスキャン (OSINT)',
+      typeWebScan: 'リンク切れチェッカー (Web Scanner)',
+      typeAssetAuditor: 'アセット監査 (Asset Auditor)',
+      scanFootnoteWebScanner: '同一ドメイン内の内部リンクを再帰的に巡回し、デッドリンクやリンク切れをチェックします。',
+      scanFootnoteAssetAuditor: '公開されている環境変数ファイル（.env）、リポジトリ（.git）、バックアップ、管理画面などを検出します。',
+      toastEnterUrl: '有効なWebサイトのURLを入力してください（http:// または https:// で始まる必要があります）。'
     }
   };
 
   // Svelte 5 Runes for state management
   let activeTab = $state('dashboard'); // 'dashboard', 'history', 'settings'
   let target = $state('');
+  let selectedScanType = $state('osint'); // 'osint', 'webscanner'
   let scanning = $state(false);
   let scanHistory = $state([]);
   let selectedScan = $state(null);
@@ -208,6 +229,38 @@
       ];
     }
     if (method === 'GetFindings') {
+      if (args[0] && args[0].includes('webscanner')) {
+        return [
+          {
+            id: 'find_link_1',
+            scan_id: args[0],
+            target: 'https://example.com',
+            module: 'webscanner',
+            title: 'Broken Link Detected: https://example.com/broken-page',
+            description: 'Internal link check failed. The URL https://example.com/broken-page is broken/dead. It returned HTTP status code 404. Found on page: https://example.com',
+            severity: 'medium',
+            proof: 'Status Code: 404, Error: , Source: https://example.com',
+            ai_advice: 'Remove the broken link reference from the HTML code, or update the hyperlink destination to point to the correct active URL page.',
+            timestamp: new Date().toISOString()
+          }
+        ];
+      }
+      if (args[0] && args[0].includes('asset_auditor')) {
+        return [
+          {
+            id: 'find_audit_1',
+            scan_id: args[0],
+            target: 'https://example.com',
+            module: 'asset_auditor',
+            title: 'Exposed Configuration or Asset: .env',
+            description: 'Asset auditing detected an exposed directory or file resource. Path: .env. URL: https://example.com/.env. Details: The path is publicly accessible (HTTP 200 OK), which might expose sensitive data, backups, or system directories.',
+            severity: 'critical',
+            proof: 'Path: .env, Status Code: 200',
+            ai_advice: 'Restrict access to `.env` files in your web server configuration (e.g. Nginx, Apache), or move them outside of the web server document root directory to prevent exposure of credentials.',
+            timestamp: new Date().toISOString()
+          }
+        ];
+      }
       return [
         {
           id: 'find_80',
@@ -236,8 +289,9 @@
       ];
     }
     if (method === 'StartScan') {
+      const scanType = args[1] || 'osint';
       return {
-        id: 'mock_' + Date.now(),
+        id: 'mock_' + scanType + '_' + Date.now(),
         target: args[0],
         status: 'running',
         start_time: new Date().toISOString(),
@@ -313,13 +367,23 @@
     lastScanTime = now;
 
     if (!target) {
-      showToast(t('toastEnterTarget'));
+      if (selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor') {
+        showToast(t('toastEnterUrl'));
+      } else {
+        showToast(t('toastEnterTarget'));
+      }
       return;
     }
+
+    if ((selectedScanType === 'webscanner' || selectedScanType === 'asset_auditor') && !target.startsWith('http://') && !target.startsWith('https://')) {
+      showToast(t('toastEnterUrl'));
+      return;
+    }
+
     scanning = true;
     showToast(t('toastScanStarted', { target }));
     try {
-      const scan = await callBind('StartScan', target);
+      const scan = await callBind('StartScan', target, selectedScanType);
       if (scan) {
         await loadHistory();
         // Periodically poll for updates until the active scan completes
@@ -465,13 +529,44 @@
           </div>
 
           <!-- Glass Scan Panel -->
-          <div class="glass-panel p-6 rounded-2xl shadow-xl space-y-4">
+          <div class="glass-panel p-6 rounded-2xl shadow-xl space-y-5">
+            <!-- Scan Type Selector -->
+            <div class="flex gap-2 p-1 bg-slate-900/60 rounded-xl border border-slate-800/80">
+              <button
+                disabled={scanning}
+                onclick={() => selectedScanType = 'osint'}
+                class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all {selectedScanType === 'osint' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
+              >
+                {t('typePortScan')}
+              </button>
+              <button
+                disabled={scanning}
+                onclick={() => selectedScanType = 'webscanner'}
+                class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all {selectedScanType === 'webscanner' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
+              >
+                {t('typeWebScan')}
+              </button>
+              <button
+                disabled={scanning}
+                onclick={() => selectedScanType = 'asset_auditor'}
+                class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all {selectedScanType === 'asset_auditor' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}"
+              >
+                {t('typeAssetAuditor')}
+              </button>
+            </div>
+
             <div class="flex gap-4">
               <input
                 type="text"
                 bind:value={target}
                 disabled={scanning}
-                placeholder={t('placeholderTarget')}
+                placeholder={
+                  selectedScanType === 'webscanner' 
+                    ? t('placeholderTargetWebScan') 
+                    : selectedScanType === 'asset_auditor'
+                    ? t('placeholderTargetAssetAuditor')
+                    : t('placeholderTarget')
+                }
                 class="flex-1 px-4 py-3 rounded-xl glass-input text-base"
                 onkeydown={(e) => e.key === 'Enter' && triggerScan()}
               />
@@ -495,7 +590,11 @@
             
             <div class="text-xs text-slate-500 flex items-center gap-2">
               <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              {t('scanFootnote')}
+              {selectedScanType === 'webscanner' 
+                ? t('scanFootnoteWebScanner') 
+                : selectedScanType === 'asset_auditor'
+                ? t('scanFootnoteAssetAuditor')
+                : t('scanFootnote')}
             </div>
           </div>
 
