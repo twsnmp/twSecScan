@@ -8,5 +8,15 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "http://localhost:34116",
   "devserver": "localhost:34117",
-  "author": { "name": "twsnmp-style-developer" }
+  "author": {
+    "name": "Masayuki Yamai",
+    "email": "twsnmp@gmail.com"
+  },
+  "Info": {
+    "companyName": "TWSNMP",
+    "productName": "twSecScan",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright 2026 Masayuki Yamai",
+    "comments": "https://lhx98.linkclub.jp/twise.co.jp/"
+  }
 }
