@@ -18,6 +18,14 @@
 
 ---
 
+## 🗺️ Overview
+
+![twSecScan Overview](images/en/overview.png)
+
+*twSecScan provides four Core Modules (OSINT, Web, API Security, Local Audit), an AI Engine that integrates with OpenAI, Anthropic, or Ollama, and a five-step Scan Workflow — all delivered as a single binary.*
+
+---
+
 ## 🖥️ Screenshots
 
 ### Dashboard

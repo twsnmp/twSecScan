@@ -18,6 +18,14 @@
 
 ---
 
+## 🗺️ 概要
+
+![twSecScan 概要](images/ja/overview.png)
+
+*twSecScan は、4つのコアモジュール（OSINT・Web・APIセキュリティ・ローカル監査）と、OpenAI・Anthropic・Ollama と連携するAIエンジンを搭載し、5ステップのスキャンワークフローをシングルバイナリで提供します。*
+
+---
+
 ## 🖥️ スクリーンショット
 
 ### ダッシュボード
