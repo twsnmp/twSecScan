@@ -1,0 +1,5 @@
+title: twSecScan
+description: AIによる分析機能を搭載したゼロ依存のセキュリティスキャナー デスクトップアプリケーション。外部ツール不要でHTTPS/SSH/メールなどのセキュリティを検証できる。TWSNMPシリーズプロジェクト。
+remote_theme: pages-themes/hacker@v0.2.0
+plugins:
+- jekyll-remote-theme
