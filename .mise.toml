@@ -1,7 +1,6 @@
 [tools]
-go = "1.26.0"
-node = "20.19.5"
-wails = "2.12.0"
+go = "1.26"
+node = "20.19"
 
 [tasks]
 dev = "wails dev"
