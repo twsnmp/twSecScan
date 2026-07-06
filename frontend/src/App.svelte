@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { marked } from 'marked';
+  import { GetVersion } from '../wailsjs/go/main/App';
 
   const translations = {
     en: {
@@ -8,7 +9,6 @@
       dashboard: 'Dashboard',
       history: 'Scan History',
       settings: 'Settings',
-      version: 'v0.1.0',
       scanInProgress: 'Scan in progress...',
       dashboardTitle: 'Target Vulnerability Scanning',
       dashboardDesc: 'Perform security scans & use local/cloud AI analysis to formulate real-time, actionable security advice.',
@@ -112,7 +112,6 @@
       dashboard: 'ダッシュボード',
       history: 'スキャン履歴',
       settings: '設定',
-      version: 'v0.1.0',
       scanInProgress: 'スキャン実行中...',
       dashboardTitle: '対象の脆弱性スキャン',
       dashboardDesc: 'セキュリティスキャンを実行し、ローカルまたはクラウドのAI分析を使用して、リアルタイムで実用的なアドバイスを提供します。',
@@ -236,6 +235,7 @@
   let testServerEnabled = $state(false);
   let testServerUrl = $state('');
   let togglingTestServer = $state(false);
+  let appVersion = $state('v0.1.0'); // populated at runtime from GetVersion()
 
   // Derived active language
   let activeLang = $derived.by(() => {
@@ -271,6 +271,9 @@
     }
     // Mock fallbacks for standalone browser previews
     console.warn(`Wails method ${method} not found, using mockup data.`);
+    if (method === 'GetVersion') {
+      return 'v0.1.0';
+    }
     if (method === 'GetConfig') {
       return { ...settings };
     }
@@ -643,9 +646,15 @@
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
     loadConfig();
     loadHistory();
+    try {
+      const v = await GetVersion();
+      if (v) appVersion = v;
+    } catch (e) {
+      console.error('Failed to get version:', e);
+    }
   });
 </script>
 
@@ -690,7 +699,7 @@
     </div>
 
     <div class="p-4 border-t border-slate-700/50 text-xs text-slate-500 text-center">
-      {t('version')}
+      {appVersion}
     </div>
   </aside>
 
