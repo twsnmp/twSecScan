@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -34,20 +35,50 @@ type App struct {
 	database   *db.DB
 	mu         sync.Mutex
 	testServer *webscanner.TestServer
+	dbPath     string // resolved database file path
 }
 
-// NewApp creates a new App application struct
-func NewApp() *App {
+// NewApp creates a new App application struct.
+// dbPath overrides the default database location when non-empty.
+func NewApp(dbPath string) *App {
 	return &App{
 		testServer: webscanner.NewTestServer(),
+		dbPath:     dbPath,
 	}
+}
+
+// getDataPath returns the platform-appropriate path for a data file.
+//
+//	macOS:   ~/Library/Application Support/twSecScan/<filename>
+//	Windows: %APPDATA%\twSecScan\<filename>
+//	Linux:   ~/.config/twSecScan/<filename>
+//
+// If override is non-empty, it is used as-is.
+func getDataPath(override, filename string) (string, error) {
+	if override != "" {
+		return override, nil
+	}
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user config dir: %w", err)
+	}
+	appDir := filepath.Join(configDir, "twSecScan")
+	if err := os.MkdirAll(appDir, 0750); err != nil {
+		return "", fmt.Errorf("failed to create app data dir %s: %w", appDir, err)
+	}
+	return filepath.Join(appDir, filename), nil
 }
 
 // startup is called when the app starts. The context is saved
 // and we initialize the bbolt database.
 func (a *App) startup(ctx context.Context) {
 	a.wailsCtx = ctx
-	dbPath := "twSecScan.db"
+	dbPath, err := getDataPath(a.dbPath, "twSecScan.db")
+	if err != nil {
+		log.Printf("Failed to resolve database path: %v", err)
+		return
+	}
+	log.Printf("Database path: %s", dbPath)
 	database, err := db.NewDB(dbPath)
 	if err != nil {
 		log.Printf("Failed to initialize database: %v", err)

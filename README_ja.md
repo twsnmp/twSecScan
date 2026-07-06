@@ -151,6 +151,33 @@ twSecScan/
 
 ---
 
+## 🗄️ データファイルの場所
+
+スキャン履歴・設定は以下のパスに自動作成されるデータベースファイルに保存されます。
+
+| OS | デフォルトパス |
+|-----|---------------|
+| macOS | `~/Library/Application Support/twSecScan/twSecScan.db` |
+| Windows | `%APPDATA%\twSecScan\twSecScan.db` |
+| Linux | `~/.config/twSecScan/twSecScan.db` |
+
+### 保存先を変更する（起動パラメータ）
+
+`--db-path` オプションで任意のパスを指定できます。
+
+```bash
+# 例: カレントディレクトリに保存
+./twSecScan --db-path ./mydata.db
+
+# 例: 絶対パスを指定
+./twSecScan --db-path /home/user/backup/scan.db
+```
+
+> [!NOTE]
+> ランチャーやアプリパッケージから起動した場合は、自動的にデフォルトパスが使用されます。コマンドラインから起動する場合のみ `--db-path` が有効です。
+
+---
+
 ## ⚠️ 免責事項
 
 twSecScan は **許可を得た上でのセキュリティテスト** のみを目的としています。自分が所有・管理していないシステムやネットワークをスキャンする場合は、必ず事前に明示的な許可を取得してください。無許可のスキャンは法律や規制に違反する場合があります。

@@ -151,6 +151,33 @@ After a scan completes, click the **Export** button in the Scan History view to 
 
 ---
 
+## 🗄️ Data Storage
+
+Scan history and settings are stored in a database file created automatically at the following platform-specific location:
+
+| OS | Default Path |
+|----|--------------|
+| macOS | `~/Library/Application Support/twSecScan/twSecScan.db` |
+| Windows | `%APPDATA%\twSecScan\twSecScan.db` |
+| Linux | `~/.config/twSecScan/twSecScan.db` |
+
+### Custom Database Path (CLI option)
+
+Use the `--db-path` flag to override the default location:
+
+```bash
+# Store in the current directory
+./twSecScan --db-path ./mydata.db
+
+# Specify an absolute path
+./twSecScan --db-path /home/user/backup/scan.db
+```
+
+> [!NOTE]
+> When launched from a launcher or app package, the default path is used automatically. The `--db-path` flag is only effective when running from the command line.
+
+---
+
 ## ⚠️ Legal Notice
 
 twSecScan is intended for **authorized security testing only**. Always obtain explicit permission before scanning any system or network you do not own. Unauthorized scanning may violate laws and regulations.

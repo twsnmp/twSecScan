@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"flag"
 	"log"
 
 	"github.com/wailsapp/wails/v2"
@@ -13,8 +14,12 @@ import (
 var assets embed.FS
 
 func main() {
+	// Parse command-line flags
+	dbPath := flag.String("db-path", "", "Path to the database file (default: platform-specific user data directory)")
+	flag.Parse()
+
 	// Create an instance of the app structure
-	app := NewApp()
+	app := NewApp(*dbPath)
 
 	// Configure and start application
 	err := wails.Run(&options.App{
