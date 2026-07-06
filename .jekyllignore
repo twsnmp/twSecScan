@@ -1,0 +1,9 @@
+frontend/
+*.go
+go.mod
+go.sum
+Makefile
+wails.json
+wails.nsis.template
+build/
+modules/
