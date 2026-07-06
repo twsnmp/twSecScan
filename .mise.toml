@@ -4,7 +4,17 @@ node = "20.19"
 
 [tasks]
 dev = "wails dev"
-build = "wails build"
 test = "go test ./..."
 clear = "rm -rf build/bin/ dist/"
 release-mac = "./scripts/release-mac.sh"
+
+[tasks.build]
+description = "Build with version from Git tag and commit hash"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+echo "Building version: ${VERSION}-${COMMIT}"
+wails build -ldflags "-X main.version=${VERSION}-${COMMIT}"
+"""

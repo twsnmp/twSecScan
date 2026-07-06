@@ -36,15 +36,25 @@ type App struct {
 	mu         sync.Mutex
 	testServer *webscanner.TestServer
 	dbPath     string // resolved database file path
+	version    string // application version (set at build time via ldflags)
 }
 
 // NewApp creates a new App application struct.
 // dbPath overrides the default database location when non-empty.
-func NewApp(dbPath string) *App {
+// version is the application version string embedded at build time.
+func NewApp(dbPath, version string) *App {
 	return &App{
 		testServer: webscanner.NewTestServer(),
 		dbPath:     dbPath,
+		version:    version,
 	}
+}
+
+// GetVersion returns the application version string.
+// The version is embedded at build time via -ldflags "-X main.version=..."
+// and includes the Git tag and short commit hash (e.g. "v1.2.0-abc1234").
+func (a *App) GetVersion() string {
+	return a.version
 }
 
 // getDataPath returns the platform-appropriate path for a data file.
