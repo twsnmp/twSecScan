@@ -137,7 +137,7 @@ func (db *DB) GetScan(scanID string) (*models.Scan, error) {
 
 // ListScans retrieves all scans sorted by StartTime descending.
 func (db *DB) ListScans() ([]*models.Scan, error) {
-	var scans []*models.Scan
+	scans := []*models.Scan{}
 	err := db.conn.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketScans)
 		return b.ForEach(func(k, v []byte) error {

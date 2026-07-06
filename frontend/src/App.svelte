@@ -468,9 +468,7 @@
   async function loadHistory() {
     try {
       const history = await callBind('ListScans');
-      if (history) {
-        scanHistory = history;
-      }
+      scanHistory = history ?? [];
     } catch (e) {
       console.error(e);
     }
