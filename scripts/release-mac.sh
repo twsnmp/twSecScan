@@ -34,7 +34,12 @@ COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_VERSION="${VERSION}-${COMMIT}"
 info "Build version: ${BUILD_VERSION}"
 
-# Step 1: Build the application using Wails
+# Step 1: Build the frontend explicitly (wails build may skip this)
+info "Building frontend assets..."
+(cd frontend && npm install && npm run build)
+success "Frontend built successfully."
+
+# Step 2: Build the application using Wails
 info "Building Wails application for macOS (Universal)..."
 wails build -platform darwin/universal -clean -ldflags "-X main.version=${BUILD_VERSION}"
 
