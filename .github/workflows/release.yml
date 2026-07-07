@@ -50,6 +50,7 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
       - name: Build Wails App
+        shell: bash
         run: |
           VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
           COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
