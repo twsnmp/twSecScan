@@ -49,13 +49,27 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
+      - name: Generate Wails Bindings
+        shell: bash
+        run: |
+          mkdir -p frontend/dist
+          touch frontend/dist/index.html
+          wails generate module
+
+      - name: Build Frontend
+        shell: bash
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
       - name: Build Wails App
         shell: bash
         run: |
           VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
           COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
           BUILD_VERSION="${VERSION}(${COMMIT})"
-          wails build -platform ${{ matrix.platform }} -clean ${{ matrix.tags }} -ldflags "-X main.version=${BUILD_VERSION}"
+          wails build -platform ${{ matrix.platform }} -clean -s ${{ matrix.tags }} -ldflags "-X main.version=${BUILD_VERSION}"
 
       - name: Package Release (Windows)
         if: runner.os == 'Windows'
