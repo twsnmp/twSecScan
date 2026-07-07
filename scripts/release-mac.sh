@@ -31,7 +31,7 @@ info "Starting macOS Release Build and Packaging Process"
 # Resolve version from Git tag and commit hash
 VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_VERSION="${VERSION}-${COMMIT}"
+BUILD_VERSION="${VERSION}(${COMMIT})"
 info "Build version: ${BUILD_VERSION}"
 
 # Step 1: Build the frontend explicitly (wails build may skip this)
