@@ -48,3 +48,4 @@ go.work.sum
 /frontend/node_modules/
 /frontend/wailsjs/
 dist/
+.DS_Store
